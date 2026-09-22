@@ -2,7 +2,7 @@
 
 import type { ResolvedConfig } from './config.ts'
 import { resolveApiKey } from './config.ts'
-import { JevHttpError, JevNetworkError, JevProtocolError, JevTimeoutError } from './errors.ts'
+import { JevHttpError, JevNetworkError, JevProtocolError, JevQuotaError, JevTimeoutError } from './errors.ts'
 import type { JevQuestions, JevState, SystemOneRequest } from './protocol.ts'
 import { withRetry } from './retry.ts'
 
@@ -102,7 +102,9 @@ export class JevClient {
    * @param options - state, questions, optional model override, and cancellation.
    * @returns the parsed JSON response body, without validating its fields.
    * @throws JevConfigError when neither configuration source provides an API key.
-   * @throws JevHttpError when the response status is outside 2xx.
+   * @throws JevQuotaError when the response is 402: the account cannot be charged,
+   * which retrying cannot fix.
+   * @throws JevHttpError when the response status is outside 2xx and not 402.
    * @throws JevProtocolError when a 2xx response body is not JSON.
    * @throws JevNetworkError when the transport fails before a response arrives.
    * @throws JevTimeoutError when the call exhausts `config.timeoutMs`.
@@ -161,6 +163,14 @@ export class JevClient {
       // Cancellation surfaces as the caller's own reason or as a named timeout, never as a transport failure.
       if (signal.aborted) throw abortReason(signal, callerSignal, this.#config.timeoutMs)
       throw new JevNetworkError('Jev request failed: no response from the TypeSafe API.', { cause: error })
+    }
+    if (response.status === 402) {
+      // Payment required: distinct from every other HTTP failure because no
+      // amount of retrying restores the quota, while a caller-side rejection
+      // such as 401 or 422 is a configuration or input problem instead.
+      throw new JevQuotaError(
+        `Jev API reports the account cannot be charged (402): ${truncateBody(rawBody)}`,
+      )
     }
     if (!response.ok) {
       throw new JevHttpError(

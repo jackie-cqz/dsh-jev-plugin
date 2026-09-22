@@ -15,6 +15,7 @@ import {
   DEFAULT_RETRY,
   DEFAULT_ROUTING,
   DEFAULT_REVIEW,
+  DEFAULT_RULES,
   DEFAULT_TELEMETRY,
   DEFAULT_TIMEOUT_MS,
   type Config,
@@ -47,6 +48,8 @@ export const ConfigSchema: z<Config> = z.object({
       .description('Milliseconds the circuit stays open before one probe call.'),
     minIntervalMs: z.number().min(0).default(DEFAULT_POLICY.minIntervalMs)
       .description('Minimum milliseconds between two calls; 0 disables the spacing.'),
+    quotaCooldownMs: z.number().min(0).default(DEFAULT_POLICY.quotaCooldownMs)
+      .description('Milliseconds the breaker stops sending after the API reports quota exhaustion.'),
   }).description('Call-admission policy; disabled by default.'),
   cache: z.object({
     enabled: z.boolean().default(DEFAULT_CACHE.enabled)
@@ -77,11 +80,21 @@ export const ConfigSchema: z<Config> = z.object({
       .description('Risk score at or above which a call is denied.'),
     askAt: z.number().step(1).min(0).default(DEFAULT_GUARD.askAt)
       .description('Risk score at or above which a call needs approval.'),
+    reviseAt: z.number().step(1).min(0).default(DEFAULT_GUARD.reviseAt)
+      .description('Risk score at or above which a call is refused with rewrite guidance.'),
     escalateOnLowConfidence: z.boolean().default(DEFAULT_GUARD.escalateOnLowConfidence)
       .description('Require approval when the answer falls below confidence.escalateBelow.'),
     onError: z.union(['allow', 'deny'] as const).default(DEFAULT_GUARD.onError)
       .description('Gate outcome when Jev itself fails; allow is fail-open.'),
   }).description('Pre-execute risk gate; disabled by default.'),
+  rules: z.object({
+    enabled: z.boolean().default(DEFAULT_RULES.enabled)
+      .description('Refuse known-destructive calls offline, before any model check.'),
+    tools: z.array(z.string()).default([...DEFAULT_RULES.tools])
+      .description('Tool names the rules inspect; an empty list inspects every tool.'),
+    deny: z.array(z.string()).default([...DEFAULT_RULES.deny])
+      .description('Extra deny patterns appended to the built-in set, as regular expressions.'),
+  }).description('Deterministic offline rules; disabled by default.'),
   review: z.object({
     enabled: z.boolean().default(DEFAULT_REVIEW.enabled)
       .description('Judge each finished tool result and block the ones that need correction.'),
@@ -117,6 +130,10 @@ export const ConfigSchema: z<Config> = z.object({
       .description('Relevance probability below which an older message is dropped.'),
     question: z.string().default(DEFAULT_CONTEXT.question)
       .description('Question Jev answers about each candidate message.'),
+    maxDrops: z.number().step(1).min(0).default(DEFAULT_CONTEXT.maxDrops)
+      .description('Most messages one pass may drop; 0 leaves it uncapped.'),
+    shadow: z.boolean().default(DEFAULT_CONTEXT.shadow)
+      .description('Report what a pass would drop without changing the admitted list.'),
   }).description('Context pruning; disabled by default.'),
   intent: z.object({
     enabled: z.boolean().default(DEFAULT_INTENT.enabled)

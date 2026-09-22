@@ -5,9 +5,11 @@ import { resolveConfig, type Config as JevConfig, type ResolvedConfig } from './
 import { JevContext, type ContextMessage } from './context.ts'
 import { JevGuard } from './guard.ts'
 import { JevReview } from './review.ts'
+import { JevRules } from './rules.ts'
 import { JevRouter } from './routing.ts'
 import { ConfigSchema } from './schema.ts'
 import { JevService } from './service.ts'
+import { renderStatus, type JevStatusInput } from './status.ts'
 import { createDecideTool } from './tools/decide.ts'
 import { sessionTelemetrySink, type SessionTelemetrySink } from './dsh-telemetry.ts'
 import { JevTelemetry } from './telemetry.ts'
@@ -45,16 +47,19 @@ export const Config = ConfigSchema
  */
 export function apply(ctx: Context, config: JevConfig): void {
   const resolved = resolveConfig(config)
-  new JevService(ctx, config, { telemetry: createTelemetry(ctx, resolved) })
+  const telemetry = createTelemetry(ctx, resolved)
+  new JevService(ctx, config, { telemetry })
   const jev = ctx.jev
 
   if (resolved.enableDecide) ctx.tools.register(createDecideTool(jev))
   if (resolved.enableEvaluate) ctx.tools.register(createEvaluateTool(jev))
 
-  installGuard(ctx, resolved, jev)
+  const guard = installGuard(ctx, resolved, jev)
+  const rules = installRules(ctx, resolved)
   installReview(ctx, resolved, jev)
   installRouting(ctx, resolved, jev)
   installContextPruning(ctx, resolved, jev)
+  installStatusCommand(ctx, { config, resolved, jev, telemetry, guard, rules })
 }
 
 /**
@@ -89,8 +94,8 @@ function createTelemetry(ctx: Context, resolved: ResolvedConfig): JevTelemetry {
  * @param resolved - resolved plugin configuration.
  * @param jev - the shared service.
  */
-function installGuard(ctx: Context, resolved: ResolvedConfig, jev: JevService): void {
-  if (!resolved.guard.enabled) return
+function installGuard(ctx: Context, resolved: ResolvedConfig, jev: JevService): JevGuard | undefined {
+  if (!resolved.guard.enabled) return undefined
   const guard = new JevGuard({ service: jev, config: resolved.guard, bands: resolved.confidence })
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await guard.decide({
@@ -98,8 +103,15 @@ function installGuard(ctx: Context, resolved: ResolvedConfig, jev: JevService): 
       arguments: exec.arguments,
       signal: exec.signal,
     })
-    return decision.kind === 'allow' ? next() : decision
+    if (decision.kind === 'allow') return next()
+    // The host has no revise state, so a revise becomes a denial whose reason
+    // carries the rewrite guidance. That is the same outcome for the model — it
+    // reads the reason and retries with a better call — while `ask` stays `ask`
+    // so a mounted approval service can still decide.
+    if (decision.kind === 'revise') return { kind: 'deny', reason: decision.reason }
+    return decision
   })
+  return guard
 }
 
 /**
@@ -168,7 +180,9 @@ function installContextPruning(ctx: Context, resolved: ResolvedConfig, jev: JevS
     const decision = await next()
     if (decision.kind !== 'enter' || decision.messages.length !== messages.length) return decision
     const plan = await pruning.plan(toContextMessages(decision.messages), signal)
-    if (plan.kind === 'keep') return decision
+    // `shadow` reports what a pass would drop; applying it is what shadow mode
+    // exists to avoid, so the admitted list is returned untouched.
+    if (plan.kind !== 'prune') return decision
     const drop = new Set(plan.drop)
     return { kind: 'enter', messages: decision.messages.filter((_, index) => !drop.has(index)) }
   })
@@ -193,4 +207,118 @@ function toContextMessages(messages: readonly unknown[]): ContextMessage[] {
       : ''
     return { role, text }
   })
+
+}
+
+/**
+ * Install the deterministic offline rule layer.
+ *
+ * A `ToolGuard` is synchronous and returns a refusal reason, so this layer costs
+ * no request and no clock time; it keeps refusing known-destructive commands
+ * when the model backend is unreachable or out of quota. No guard can force-allow
+ * a call another guard denied, so this layer cannot be overridden from above.
+ * @param ctx - mounted context.
+ * @param resolved - resolved plugin configuration.
+ * @returns the rule layer, or `undefined` when the layer is disabled.
+ */
+function installRules(ctx: Context, resolved: ResolvedConfig): JevRules | undefined {
+  if (!resolved.rules.enabled) return undefined
+  const rules = new JevRules({ config: resolved.rules })
+  ctx.tools.guard(exec => rules.inspect({ name: exec.name, arguments: exec.arguments }))
+  return rules
+}
+
+/**
+ * The slice of the command registry this plugin needs.
+ *
+ * Declared structurally, like the telemetry sink, so the package keeps no DSH
+ * dependency beyond its two peers.
+ */
+interface CommandRegistry {
+  register(definition: {
+    name: string
+    description: string
+    handler: () => { kind: 'success'; text: string }
+  }): () => void
+}
+
+/** Everything the status command reports, gathered from the live instances. */
+interface StatusSources {
+  config: JevConfig
+  resolved: ResolvedConfig
+  jev: JevService
+  telemetry: JevTelemetry
+  guard: JevGuard | undefined
+  rules: JevRules | undefined
+}
+
+/**
+ * Register `/jev-status`.
+ *
+ * The command exists to expose **why nothing happened**: every failure path in
+ * this plugin is deliberately quiet, so the counters and the key's origin are
+ * the only place a silent skip becomes visible. A profile without the command
+ * registry simply gets no command.
+ * @param ctx - mounted context.
+ * @param sources - live instances and configuration to report from.
+ */
+function installStatusCommand(ctx: Context, sources: StatusSources): void {
+  const commands = ctx.get('commands') as CommandRegistry | undefined
+  if (commands === undefined) return
+  commands.register({
+    name: 'jev-status',
+    description: 'Report the Jev plugin\'s switches, thresholds, counters, and health.',
+    handler: () => ({ kind: 'success', text: renderStatus(buildStatusInput(sources)) }),
+  })
+}
+
+/**
+ * Project the live instances onto the report's plain-data input.
+ * @param sources - live instances and configuration.
+ * @returns the status report input.
+ */
+function buildStatusInput(sources: StatusSources): JevStatusInput {
+  const { config, resolved, jev, telemetry, guard, rules } = sources
+  const guardStats = guard?.stats()
+  const ruleStats = rules?.stats()
+  const telemetryStats = telemetry.stats()
+  const service = jev.stats()
+  const health = jev.health()
+  // A blank configured key counts as absent, matching how the key is resolved.
+  const configuredKey = config.apiKey !== undefined && config.apiKey !== ''
+  return {
+    model: resolved.model,
+    baseURL: resolved.baseURL,
+    apiKeySource: configuredKey ? 'config' : resolved.apiKey === undefined ? 'missing' : 'environment',
+    tools: { decide: resolved.enableDecide, evaluate: resolved.enableEvaluate },
+    guard: {
+      enabled: resolved.guard.enabled,
+      inspected: guardStats?.inspected ?? 0,
+      allowed: guardStats?.allowed ?? 0,
+      asked: guardStats?.asked ?? 0,
+      denied: guardStats?.denied ?? 0,
+      errors: guardStats?.errors ?? 0,
+    },
+    rules: {
+      enabled: resolved.rules.enabled,
+      inspected: ruleStats?.inspected ?? 0,
+      denied: ruleStats?.denied ?? 0,
+    },
+    telemetry: {
+      enabled: resolved.telemetry.log,
+      offered: telemetryStats.offered,
+      emitted: telemetryStats.emitted,
+      sampled: telemetryStats.sampled,
+      sinkErrors: telemetryStats.sinkErrors,
+    },
+    service: {
+      calls: service.calls,
+      failures: service.failures,
+      retries: service.retries,
+      inputTokens: service.tokens.input,
+      outputTokens: service.tokens.output,
+      models: service.models,
+    },
+    health: { status: health.status, reasons: health.reasons },
+  }
 }

@@ -16,21 +16,38 @@ export interface ContextMessage {
 export type ContextDecision =
   | { kind: 'keep' }
   | { kind: 'prune'; drop: readonly number[] }
+  /**
+   * Shadow mode: the pass ran and judged, but the caller MUST leave the message
+   * list unchanged. The indices are what it would have dropped.
+   */
+  | { kind: 'shadow'; drop: readonly number[] }
 
 /** Counters for the pruning hook. */
 export interface JevContextStats {
   /** Batches that reached a judgement; a list below the trigger does not count. */
   passes: number
-  /** Messages dropped across every pass. */
+  /** Messages dropped across every pass; shadow passes drop nothing. */
   dropped: number
+  /** Passes reported in shadow mode. */
+  shadowed: number
   /** Passes whose judgement failed, and which therefore kept everything. */
   errors: number
+  /** Indices the latest pass would drop, or did drop; empty before the first one. */
+  lastDrop: readonly number[]
 }
 
 /** Construction options. */
 export interface JevContextOptions {
   service: JevService
   config: ResolvedContextConfig
+}
+
+/** One candidate that cleared the threshold, with the probability that ranked it. */
+interface Candidate {
+  /** Index within the whole message list. */
+  index: number
+  /** Judged relevance; lower means more droppable. */
+  probability: number
 }
 
 /**
@@ -53,6 +70,15 @@ function candidateKey(index: number): string {
  * candidates are scored in one request — one `noul` question each — because a
  * per-message round trip would cost more than the pruning saves.
  *
+ * A probability orders candidates; it does not by itself decide how much to cut.
+ * `dropBelow` is only the gate that makes a message eligible, the lowest
+ * probabilities go first, and `maxDrops` bounds one pass. Reading the number as a
+ * threshold alone would let a single unlucky pass gut the history.
+ *
+ * Two messages are floors no probability can move: the newest one, and the first
+ * one. The first is what later messages refer back to, so `keepRecent: 0` still
+ * leaves the conversation anchored.
+ *
  * Failures keep everything, and there is deliberately no fail-closed variant:
  * dropping more history is not the conservative choice. A token-budget overrun
  * is visible and recoverable, while a silently truncated history leaves the
@@ -63,7 +89,7 @@ function candidateKey(index: number): string {
 export class JevContext {
   private readonly service: JevService
   private readonly config: ResolvedContextConfig
-  private readonly counters = { passes: 0, dropped: 0, errors: 0 }
+  private readonly counters = { passes: 0, dropped: 0, shadowed: 0, errors: 0, lastDrop: [] as number[] }
 
   /** @param options - the shared service and the resolved pruning configuration. */
   constructor(options: JevContextOptions) {
@@ -75,8 +101,9 @@ export class JevContext {
    * Plan one pruning pass. Never throws.
    * @param messages - the conversation in order, oldest first.
    * @param signal - cancellation forwarded to the judgement call.
-   * @returns `keep` for no change, or `prune` with ascending, deduplicated,
-   * in-range indices. The newest message is never among them.
+   * @returns `keep` for no change, `prune` with ascending, deduplicated, in-range
+   * indices, or `shadow` with the same indices when shadow mode is on — in which
+   * case the caller must not change the list.
    */
   async plan(messages: readonly ContextMessage[], signal?: AbortSignal): Promise<ContextDecision> {
     if (!this.config.enabled) return { kind: 'keep' }
@@ -113,7 +140,7 @@ export class JevContext {
    * @returns a snapshot; later passes do not mutate it.
    */
   stats(): Readonly<JevContextStats> {
-    return { ...this.counters }
+    return { ...this.counters, lastDrop: [...this.counters.lastDrop] }
   }
 
   /**
@@ -121,27 +148,40 @@ export class JevContext {
    * @param answers - answer map keyed by {@link candidateKey}.
    * @param candidateCount - size of the prunable prefix.
    * @param messageCount - size of the whole conversation.
-   * @returns `keep` when nothing qualifies, otherwise the drop list.
+   * @returns `keep` when nothing qualifies, otherwise the drop list, marked
+   * `shadow` when the pass must not be applied.
    */
   private classify(
     answers: Record<string, JevAnswer>,
     candidateCount: number,
     messageCount: number,
   ): ContextDecision {
-    const drop: number[] = []
+    const eligible: Candidate[] = []
     for (let index = 0; index < candidateCount; index += 1) {
       const answer = answers[candidateKey(index)]
       const probability = answer === undefined ? undefined : answer['noul']
       // An unreadable probability keeps the message: it was never judged.
       if (typeof probability !== 'number') continue
       if (!(probability < this.config.dropBelow)) continue
-      // The newest message is never dropped, which matters when `keepRecent` is 0
+      // Floors: the first message anchors the conversation, and the newest one is
+      // what the agent is working on. The latter matters when `keepRecent` is 0
       // and therefore leaves it inside the candidate range.
-      if (index === messageCount - 1) continue
-      drop.push(index)
+      if (index === 0 || index === messageCount - 1) continue
+      eligible.push({ index, probability })
     }
+    // Lowest probability first: the score ranks, the cap and the floors bound.
+    eligible.sort((left, right) => left.probability - right.probability)
+    const limited = this.config.maxDrops > 0 ? eligible.slice(0, this.config.maxDrops) : eligible
     // Ascending and deduplicated by construction: each index is visited once.
+    const drop = limited.map(candidate => candidate.index).sort((left, right) => left - right)
     if (drop.length === 0) return { kind: 'keep' }
+
+    this.counters.lastDrop = drop
+    if (this.config.shadow) {
+      // Reported, not applied, and not counted as dropped.
+      this.counters.shadowed += 1
+      return { kind: 'shadow', drop }
+    }
     this.counters.dropped += drop.length
     return { kind: 'prune', drop }
   }

@@ -61,7 +61,7 @@ describe('JevContext scope', () => {
 
     expect(await context.plan(conversation(50))).toEqual({ kind: 'keep' })
     expect(calls).toHaveLength(0)
-    expect(context.stats()).toEqual({ passes: 0, dropped: 0, errors: 0 })
+    expect(context.stats()).toEqual({ passes: 0, dropped: 0, shadowed: 0, errors: 0, lastDrop: [] })
   })
 
   it('keeps everything below the trigger without counting a pass', async () => {
@@ -75,8 +75,9 @@ describe('JevContext scope', () => {
   it('judges exactly at the trigger', async () => {
     const { context, calls } = harness(always(0))
 
-    // Four messages with the newest two reserved leaves two candidates, both scored 0.
-    expect(await context.plan(conversation(4))).toEqual({ kind: 'prune', drop: [0, 1] })
+    // Four messages with the newest two reserved leaves two candidates, both scored
+    // 0; the first message is a floor, so only the second is droppable.
+    expect(await context.plan(conversation(4))).toEqual({ kind: 'prune', drop: [1] })
     expect(calls).toHaveLength(1)
     expect(context.stats().passes).toBe(1)
   })
@@ -116,14 +117,15 @@ describe('JevContext decisions', () => {
   it('drops only the messages scored below the threshold, ascending', async () => {
     const { context } = harness(async () => scored({ m0: 0.1, m1: 0.9, m2: 0.05, m3: 0.8 }))
 
-    expect(await context.plan(conversation(6))).toEqual({ kind: 'prune', drop: [0, 2] })
-    expect(context.stats().dropped).toBe(2)
+    expect(await context.plan(conversation(6))).toEqual({ kind: 'prune', drop: [2] })
+    expect(context.stats().dropped).toBe(1)
   })
 
   it('keeps a candidate whose answer is missing', async () => {
     const { context } = harness(async () => scored({ m0: 0.01, m2: 0.01 }))
 
-    expect(await context.plan(conversation(6))).toEqual({ kind: 'prune', drop: [0, 2] })
+    // m1 has no answer and m0 is the floor, so only m2 is dropped.
+    expect(await context.plan(conversation(6))).toEqual({ kind: 'prune', drop: [2] })
   })
 
   it('keeps a candidate whose probability is not a number', async () => {
@@ -140,7 +142,8 @@ describe('JevContext decisions', () => {
     const config = resolveConfig({ context: { enabled: true, triggerMessages: 3, keepRecent: 0, dropBelow: 0.3 } }).context
     const { context } = harness(always(0), config)
 
-    expect(await context.plan(conversation(4))).toEqual({ kind: 'prune', drop: [0, 1, 2] })
+    // Candidates are 0..3; the newest and the first are floors, so 1 and 2 drop.
+    expect(await context.plan(conversation(4))).toEqual({ kind: 'prune', drop: [1, 2] })
   })
 
   it('returns keep rather than an empty prune', async () => {
@@ -160,7 +163,7 @@ describe('JevContext failures', () => {
     const { context } = harness(async () => { throw rejection })
 
     expect(await context.plan(conversation(6))).toEqual({ kind: 'keep' })
-    expect(context.stats()).toEqual({ passes: 1, dropped: 0, errors: 1 })
+    expect(context.stats()).toEqual({ passes: 1, dropped: 0, shadowed: 0, errors: 1, lastDrop: [] })
   })
 })
 
@@ -189,7 +192,7 @@ describe('JevContext bookkeeping', () => {
     await context.plan(conversation(4))
     await context.plan(conversation(1))
 
-    expect(context.stats()).toEqual({ passes: 2, dropped: 4, errors: 0 })
+    expect(context.stats()).toEqual({ passes: 2, dropped: 2, shadowed: 0, errors: 0, lastDrop: [1] })
   })
 
   it('returns a snapshot that later passes do not mutate', async () => {
@@ -199,6 +202,79 @@ describe('JevContext bookkeeping', () => {
     const snapshot = context.stats()
     await context.plan(conversation(4))
 
-    expect(snapshot).toEqual({ passes: 1, dropped: 2, errors: 0 })
+    expect(snapshot).toEqual({ passes: 1, dropped: 1, shadowed: 0, errors: 0, lastDrop: [1] })
+  })
+})
+
+describe('JevContext shadow mode', () => {
+  it('reports what it would drop without counting it as dropped', async () => {
+    const config = resolveConfig({
+      context: { enabled: true, triggerMessages: 4, keepRecent: 2, dropBelow: 0.3, shadow: true },
+    }).context
+    const { context } = harness(async () => scored({ m0: 0.1, m1: 0.05 }), config)
+
+    expect(await context.plan(conversation(4))).toEqual({ kind: 'shadow', drop: [1] })
+    expect(context.stats()).toEqual({ passes: 1, dropped: 0, shadowed: 1, errors: 0, lastDrop: [1] })
+  })
+
+  it('reports the same indices the enforcing mode would drop', async () => {
+    const response = async () => scored({ m0: 0.9, m1: 0.05, m2: 0.02 })
+    const enforcing = harness(response, resolveConfig({
+      context: { enabled: true, triggerMessages: 5, keepRecent: 2, dropBelow: 0.3 },
+    }).context)
+    const shadow = harness(response, resolveConfig({
+      context: { enabled: true, triggerMessages: 5, keepRecent: 2, dropBelow: 0.3, shadow: true },
+    }).context)
+
+    const applied = await enforcing.context.plan(conversation(5))
+    const reported = await shadow.context.plan(conversation(5))
+
+    expect(reported.kind).toBe('shadow')
+    expect(applied.kind).toBe('prune')
+    const reportedDrop = reported.kind === 'shadow' ? reported.drop : []
+    const appliedDrop = applied.kind === 'prune' ? applied.drop : []
+    expect(reportedDrop).toEqual(appliedDrop)
+  })
+
+  it('leaves lastDrop empty before any pass runs', () => {
+    const { context } = harness(always(0))
+
+    expect(context.stats().lastDrop).toEqual([])
+  })
+})
+
+describe('JevContext ranking', () => {
+  it('drops the lowest probabilities first when a pass is capped', async () => {
+    const config = resolveConfig({
+      context: { enabled: true, triggerMessages: 6, keepRecent: 1, dropBelow: 0.5, maxDrops: 2 },
+    }).context
+    const { context } = harness(
+      async () => scored({ m0: 0.01, m1: 0.4, m2: 0.2, m3: 0.3, m4: 0.01 }),
+      config,
+    )
+
+    // Eligible are 1..4; the two lowest are m4 (0.01) then m2 (0.2), reported ascending.
+    expect(await context.plan(conversation(6))).toEqual({ kind: 'prune', drop: [2, 4] })
+  })
+
+  it('drops every eligible candidate when the cap is zero', async () => {
+    const config = resolveConfig({
+      context: { enabled: true, triggerMessages: 6, keepRecent: 1, dropBelow: 0.5, maxDrops: 0 },
+    }).context
+    const { context } = harness(
+      async () => scored({ m0: 0.01, m1: 0.4, m2: 0.2, m3: 0.3, m4: 0.01 }),
+      config,
+    )
+
+    expect(await context.plan(conversation(6))).toEqual({ kind: 'prune', drop: [1, 2, 3, 4] })
+  })
+
+  it('never drops the first message even when it scores lowest', async () => {
+    const config = resolveConfig({
+      context: { enabled: true, triggerMessages: 2, keepRecent: 0, dropBelow: 0.3 },
+    }).context
+    const { context } = harness(always(0), config)
+
+    expect(await context.plan(conversation(3))).toEqual({ kind: 'prune', drop: [1] })
   })
 })

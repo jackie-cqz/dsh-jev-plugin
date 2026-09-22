@@ -5,6 +5,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import type { CallSystemOneOptions, JevClient } from '../src/client.ts'
 import type { Config } from '../src/config.ts'
+import { JevQuotaError } from '../src/errors.ts'
 import {
   JevCircuitOpenError,
   JevConfigError,
@@ -58,7 +59,7 @@ describe('JevService registration', () => {
       lastLatencyMs: 0,
       totalLatencyMs: 0,
       models: [],
-      policy: { rejectedByCircuit: 0, spacedCalls: 0, circuitOpens: 0, circuit: 'closed' },
+      policy: { rejectedByCircuit: 0, rejectedByQuota: 0, quotaCooling: false, spacedCalls: 0, circuitOpens: 0, circuit: 'closed' },
       cache: { hits: 0, misses: 0, entries: 0 },
     })
   })
@@ -681,5 +682,31 @@ describe('retry auditing', () => {
     await ctx.jev.callSystemOne({ state: 'x', questions: { decision: NOUL_QUESTION } })
 
     expect(ctx.jev.stats().retries).toBe(0)
+  })
+})
+
+describe('quota exhaustion', () => {
+  it('counts the failure and stops reaching the transport during the cooldown', async () => {
+    const { client, calls } = fakeClient(async () => { throw new JevQuotaError('quota exhausted') })
+    // The cooldown lives in the admission policy, so it must be enabled for a
+    // quota failure to suppress later calls.
+    const ctx = mount({ policy: { enabled: true } }, { client })
+
+    await expect(
+      ctx.jev.callSystemOne({ state: 'x', questions: { decision: NOUL_QUESTION } }),
+    ).rejects.toBeInstanceOf(JevQuotaError)
+
+    expect(ctx.jev.stats().failures).toBe(1)
+    expect(calls).toHaveLength(1)
+    const callsBefore = ctx.jev.stats().calls
+
+    // The second attempt never reaches the injected transport: the cooldown
+    // refuses it before dispatch, and a refusal is not a call.
+    await expect(
+      ctx.jev.callSystemOne({ state: 'x', questions: { decision: NOUL_QUESTION } }),
+    ).rejects.toBeInstanceOf(JevQuotaError)
+
+    expect(calls).toHaveLength(1)
+    expect(ctx.jev.stats().calls).toBe(callsBefore)
   })
 })

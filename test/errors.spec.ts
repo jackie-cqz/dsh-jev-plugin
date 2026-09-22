@@ -8,6 +8,7 @@ import {
   JevHttpError,
   JevNetworkError,
   JevProtocolError,
+  JevQuotaError,
   JevTimeoutError,
   JevValidationError,
 } from '../src/errors.ts'
@@ -76,5 +77,16 @@ describe('JevHttpError message', () => {
     expect(error.status).toBe(429)
     expect(error.body).toBe('slow down')
     expect(error.retryAfterMs).toBe(1_500)
+  })
+})
+
+describe('JevQuotaError', () => {
+  it('carries a stable code and name', () => {
+    const error = new JevQuotaError('quota exhausted')
+
+    expect(error).toBeInstanceOf(JevError)
+    expect(error.code).toBe('JEV_QUOTA')
+    expect(error.name).toBe('JevQuotaError')
+    expect(error.message).toBe('quota exhausted')
   })
 })

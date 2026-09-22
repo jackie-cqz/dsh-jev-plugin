@@ -8,6 +8,7 @@ import {
   JevHttpError,
   JevNetworkError,
   JevProtocolError,
+  JevQuotaError,
   JevTimeoutError,
   JevValidationError,
 } from './errors.ts'
@@ -143,6 +144,7 @@ function errorCodeOf(error: unknown): string {
 
 function isServiceFailure(error: unknown): boolean {
   if (error instanceof JevNetworkError || error instanceof JevTimeoutError) return true
+  if (error instanceof JevQuotaError) return true
   if (error instanceof JevProtocolError || error instanceof JevValidationError) return true
   if (error instanceof JevHttpError) return error.retryable
   return false
@@ -290,7 +292,11 @@ export class JevService extends Service {
     } catch (error) {
       const serviceFailure = isServiceFailure(error)
       if (serviceFailure) this.counters.failures += 1
-      this.policy.record(serviceFailure ? 'failure' : 'success')
+      // Quota exhaustion opens a cooldown as well as extending the streak, so it
+      // is reported separately from a transient failure.
+      this.policy.record(
+        serviceFailure ? error instanceof JevQuotaError ? 'quota' : 'failure' : 'success',
+      )
       this.emit({
         outcome: 'failure',
         model: undefined,

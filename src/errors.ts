@@ -84,6 +84,22 @@ export class JevHttpError extends JevError {
 }
 
 /** HTTP 2xx response whose body is not valid JSON. */
+/**
+ * The API reports the account cannot be charged for the request, which means the
+ * quota is exhausted rather than the request being malformed or the network
+ * failing.
+ *
+ * Not retryable: an immediate repeat cannot succeed until the account is topped
+ * up, so `isRetryable` reports false for it and the admission policy opens a
+ * cooldown instead of spending the retry budget and its backoff waits.
+ */
+export class JevQuotaError extends JevError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, 'JEV_QUOTA', options)
+    this.name = 'JevQuotaError'
+  }
+}
+
 export class JevProtocolError extends JevError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, 'JEV_PROTOCOL', options)

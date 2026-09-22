@@ -29,6 +29,13 @@ export interface PolicyConfig {
   openMs?: number
   /** Minimum milliseconds between two calls; 0 means no spacing; defaults to 200. */
   minIntervalMs?: number
+  /**
+   * Milliseconds the breaker stops sending requests after the API reports quota
+   * exhaustion; defaults to 900000. Unlike a transient failure, an exhausted
+   * quota does not recover by retrying, so calls fail fast and the offline rule
+   * layer keeps working instead.
+   */
+  quotaCooldownMs?: number
 }
 
 /** Call-admission policy with every field resolved. */
@@ -88,6 +95,13 @@ export interface GuardConfig {
    */
   escalateOnLowConfidence?: boolean
   /**
+   * Risk score at or above which the call is refused with rewrite guidance
+   * instead of being escalated to a human. Must lie between `askAt` and
+   * `denyAt`; defaults to `denyAt`, which leaves the band empty until a
+   * deployment widens it.
+   */
+  reviseAt?: number
+  /**
    * What the gate does when Jev itself fails (transport, timeout, breaker):
    * `allow` keeps the agent working, `deny` refuses anything the gate could not
    * clear. Defaults to `allow`.
@@ -97,6 +111,25 @@ export interface GuardConfig {
 
 /** Risk gate with every field resolved. */
 export interface ResolvedGuardConfig extends Required<GuardConfig> {}
+
+/**
+ * Deterministic offline rules evaluated before any semantic check.
+ *
+ * They run synchronously, need no API key, and cannot be overridden by an
+ * approval: this is the layer that still refuses known-destructive commands when
+ * the model backend is unreachable or out of quota.
+ */
+export interface RulesConfig {
+  /** Enables the rule layer; defaults to `false`. */
+  enabled?: boolean
+  /** Tool names the rules inspect; an empty list inspects every tool. */
+  tools?: string[]
+  /** Extra deny patterns appended to the built-in set, as case-insensitive regular expressions. */
+  deny?: string[]
+}
+
+/** Rule layer with every field resolved. */
+export interface ResolvedRulesConfig extends Required<RulesConfig> {}
 
 /**
  * Post-execute result review: Jev judges whether a finished tool result needs
@@ -157,6 +190,16 @@ export interface ContextConfig {
   dropBelow?: number
   /** Question Jev answers about each candidate message. */
   question?: string
+  /**
+   * Most messages one pass may drop; `0` leaves it uncapped. A cap keeps one
+   * unlucky judgement from gutting the history in a single step.
+   */
+  maxDrops?: number
+  /**
+   * Reports what a pass would drop without changing the admitted list; defaults
+   * to `false`. Any hook that removes content should be run in this mode first.
+   */
+  shadow?: boolean
 }
 
 /** Context pruning with every field resolved. */
@@ -226,6 +269,8 @@ export interface Config {
   confidence?: ConfidenceConfig
   /** Pre-execute risk gate; disabled unless enabled here. */
   guard?: GuardConfig
+  /** Deterministic offline rules; disabled unless enabled here. */
+  rules?: RulesConfig
   /** Post-execute result review; disabled unless enabled here. */
   review?: ReviewConfig
   /** Model routing; disabled unless enabled here. */
@@ -267,6 +312,7 @@ export const DEFAULT_POLICY: ResolvedPolicyConfig = {
   failureThreshold: 5,
   openMs: 30_000,
   minIntervalMs: 200,
+  quotaCooldownMs: 900_000,
 }
 
 /** Default response cache; `enabled: false` keeps MVP behavior. */
@@ -298,6 +344,8 @@ export const DEFAULT_GUARD: ResolvedGuardConfig = {  enabled: false,
   levels: [...DEFAULT_GUARD_LEVELS],
   denyAt: DEFAULT_GUARD_LEVELS.length - 1,
   askAt: DEFAULT_GUARD_LEVELS.length - 2,
+  // Equal to denyAt: the band is empty until a deployment widens it.
+  reviseAt: DEFAULT_GUARD_LEVELS.length - 1,
   escalateOnLowConfidence: true,
   onError: 'allow',
 }
@@ -333,6 +381,8 @@ export const DEFAULT_CONTEXT: ResolvedContextConfig = {
   triggerMessages: 40,
   keepRecent: 10,
   dropBelow: 0.3,
+  maxDrops: 0,
+  shadow: false,
   question: 'Is this earlier message still needed to continue the current task?',
 }
 
@@ -344,6 +394,13 @@ export const DEFAULT_INTENT: ResolvedIntentConfig = {
   // A class with no directive admits nothing, so intent routing is inert until
   // a deployment writes the wording it wants.
   directives: {},
+}
+
+/** Default deterministic rules; `enabled: false` keeps MVP behavior. */
+export const DEFAULT_RULES: ResolvedRulesConfig = {
+  enabled: false,
+  tools: [],
+  deny: [],
 }
 
 /** Default telemetry: no records emitted, but alert thresholds are always available. */
@@ -381,6 +438,8 @@ export interface ResolvedConfig {
   confidence: ResolvedConfidenceConfig
   /** Pre-execute risk gate with every field resolved. */
   guard: ResolvedGuardConfig
+  /** Deterministic offline rules with every field resolved. */
+  rules: ResolvedRulesConfig
   /** Post-execute result review with every field resolved. */
   review: ResolvedReviewConfig
   /** Model routing with every field resolved. */
@@ -502,6 +561,13 @@ function resolveGuard(overrides: GuardConfig | undefined): ResolvedGuardConfig {
     'guard.askAt',
     lastIndex,
   )
+  const reviseAt = requireLevelIndex(overrides?.reviseAt ?? denyAt, 'guard.reviseAt', lastIndex)
+  if (reviseAt < askAt) {
+    throw new JevConfigError(
+      `Jev configuration "guard.reviseAt" (${String(reviseAt)}) must not be below `
+      + `"guard.askAt" (${String(askAt)}).`,
+    )
+  }
   if (askAt > denyAt) {
     throw new JevConfigError(
       `Jev configuration "guard.askAt" (${String(askAt)}) must not exceed `
@@ -528,6 +594,7 @@ function resolveGuard(overrides: GuardConfig | undefined): ResolvedGuardConfig {
     levels: [...levels],
     denyAt,
     askAt,
+    reviseAt,
     escalateOnLowConfidence: overrides?.escalateOnLowConfidence ?? DEFAULT_GUARD.escalateOnLowConfidence,
     onError,
   }
@@ -640,12 +707,46 @@ function resolveContext(overrides: ContextConfig | undefined): ResolvedContextCo
       + `"context.triggerMessages" (${String(triggerMessages)}), otherwise nothing is ever prunable.`,
     )
   }
+  const maxDrops = overrides?.maxDrops ?? DEFAULT_CONTEXT.maxDrops
+  if (!Number.isInteger(maxDrops) || maxDrops < 0) {
+    throw new JevConfigError(
+      `Jev configuration "context.maxDrops" must be a non-negative integer, received ${String(maxDrops)}.`,
+    )
+  }
   return {
     enabled: overrides?.enabled ?? DEFAULT_CONTEXT.enabled,
     triggerMessages,
     keepRecent,
     dropBelow: requireUnitInterval(overrides?.dropBelow ?? DEFAULT_CONTEXT.dropBelow, 'context.dropBelow'),
     question: requireNonBlankString(overrides?.question ?? DEFAULT_CONTEXT.question, 'context.question'),
+    maxDrops,
+    shadow: overrides?.shadow ?? DEFAULT_CONTEXT.shadow,
+  }
+}
+
+/**
+ * Resolve the deterministic rule layer, compiling every pattern here so a
+ * malformed regular expression fails at load rather than mid-gate.
+ * @param overrides - raw rules configuration, if any.
+ * @returns the rule configuration with every field resolved.
+ * @throws JevConfigError when a pattern is not a valid regular expression.
+ */
+function resolveRules(overrides: RulesConfig | undefined): ResolvedRulesConfig {
+  const deny = requireStringList(overrides?.deny ?? DEFAULT_RULES.deny, 'rules.deny')
+  for (const pattern of deny) {
+    try {
+      new RegExp(pattern, 'i')
+    } catch (error) {
+      throw new JevConfigError(
+        `Jev configuration "rules.deny" holds an invalid regular expression: ${pattern}`,
+        { cause: error },
+      )
+    }
+  }
+  return {
+    enabled: overrides?.enabled ?? DEFAULT_RULES.enabled,
+    tools: resolveToolNames(overrides?.tools, 'rules.tools', DEFAULT_RULES.tools),
+    deny,
   }
 }
 
@@ -750,6 +851,10 @@ export function resolveConfig(config: Config = {}, env: NodeJS.ProcessEnv = proc
         config.policy?.minIntervalMs ?? DEFAULT_POLICY.minIntervalMs,
         'policy.minIntervalMs',
       ),
+      quotaCooldownMs: requireNonNegativeNumber(
+        config.policy?.quotaCooldownMs ?? DEFAULT_POLICY.quotaCooldownMs,
+        'policy.quotaCooldownMs',
+      ),
     },
     cache: {
       enabled: config.cache?.enabled ?? DEFAULT_CACHE.enabled,
@@ -762,6 +867,7 @@ export function resolveConfig(config: Config = {}, env: NodeJS.ProcessEnv = proc
     ),
     confidence: resolveConfidence(config.confidence),
     guard: resolveGuard(config.guard),
+    rules: resolveRules(config.rules),
     review: resolveReview(config.review),
     routing: resolveRouting(config.routing),
     context: resolveContext(config.context),

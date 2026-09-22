@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { JevClient } from '../src/client.ts'
 import type { Config, ResolvedConfig, RetryConfig } from '../src/config.ts'
 import { resolveConfig } from '../src/config.ts'
-import { JevConfigError, JevHttpError, JevNetworkError, JevProtocolError, JevTimeoutError } from '../src/errors.ts'
+import { JevConfigError, JevHttpError, JevNetworkError, JevProtocolError, JevQuotaError, JevTimeoutError } from '../src/errors.ts'
 import type { JevQuestions } from '../src/protocol.ts'
 
 const API_KEY = 'sk-jev-test-key-9f3c1d'
@@ -424,6 +424,33 @@ describe('cancellation and timeout', () => {
       expect(error).not.toBeInstanceOf(JevNetworkError)
       expect(error).not.toBeInstanceOf(JevHttpError)
       expect(fetchMock).toHaveBeenCalledTimes(1)
+    }
+  })
+})
+
+describe('quota exhaustion', () => {
+  it('raises a quota error rather than an HTTP error for 402', async () => {
+    const fetchMock = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({ error: 'payment required' }, 402))
+    const client = new JevClient(makeConfig({ retry: instantRetry(3) }), { fetch: fetchMock })
+
+    const error = await rejection(client.callSystemOne({ state: 'x', questions: QUESTIONS }))
+
+    expect(error).toBeInstanceOf(JevQuotaError)
+    expect((error as JevQuotaError).code).toBe('JEV_QUOTA')
+    expect((error as JevQuotaError).message).toContain('402')
+    // Retrying cannot restore an exhausted quota, so the budget is not spent on it.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps 401 and 403 as HTTP errors', async () => {
+    for (const status of [401, 403]) {
+      const fetchMock = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({ error: 'rejected' }, status))
+      const client = new JevClient(makeConfig({ retry: instantRetry(3) }), { fetch: fetchMock })
+
+      const error = await rejection(client.callSystemOne({ state: 'x', questions: QUESTIONS }))
+
+      expect(error).toBeInstanceOf(JevHttpError)
+      expect(error).not.toBeInstanceOf(JevQuotaError)
     }
   })
 })

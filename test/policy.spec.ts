@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ResolvedPolicyConfig } from '../src/config.ts'
-import { JevCircuitOpenError } from '../src/errors.ts'
+import { JevCircuitOpenError, JevQuotaError } from '../src/errors.ts'
 import { JevPolicy } from '../src/policy.ts'
 import { isRetryable } from '../src/retry.ts'
 
@@ -12,6 +12,7 @@ const BASE: ResolvedPolicyConfig = {
   failureThreshold: 3,
   openMs: 1000,
   minIntervalMs: 0,
+  quotaCooldownMs: 900_000,
 }
 
 /**
@@ -57,6 +58,8 @@ describe('disabled policy', () => {
 
     expect(policy.stats()).toEqual({
       rejectedByCircuit: 0,
+      rejectedByQuota: 0,
+      quotaCooling: false,
       spacedCalls: 0,
       circuitOpens: 0,
       circuit: 'closed',
@@ -246,5 +249,64 @@ describe('call spacing', () => {
     await policy.admit()
 
     expect(waits).toEqual([])
+  })
+})
+
+describe('quota cooldown', () => {
+  it('refuses immediately after a quota failure and recovers once the cooldown elapses', async () => {
+    const { policy, advance } = harness()
+
+    policy.record('quota')
+
+    await expect(policy.admit()).rejects.toBeInstanceOf(JevQuotaError)
+    expect(policy.stats().rejectedByQuota).toBe(1)
+    expect(policy.stats().quotaCooling).toBe(true)
+
+    advance(900_000)
+
+    await expect(policy.admit()).resolves.toBeUndefined()
+    expect(policy.stats().quotaCooling).toBe(false)
+  })
+
+  it('does not wait out a spacing gap while the cooldown holds', async () => {
+    const { policy, waits } = harness({ minIntervalMs: 200 })
+    await policy.admit()
+
+    policy.record('quota')
+    await expect(policy.admit()).rejects.toBeInstanceOf(JevQuotaError)
+
+    // The refusal happens before the spacing branch, so nothing sleeps.
+    expect(waits).toEqual([])
+  })
+
+  it('treats quotaCooldownMs: 0 as no cooldown', async () => {
+    const { policy } = harness({ quotaCooldownMs: 0 })
+
+    policy.record('quota')
+
+    await expect(policy.admit()).resolves.toBeUndefined()
+    expect(policy.stats().quotaCooling).toBe(false)
+  })
+
+  it('extends the breaker streak like a transient failure', async () => {
+    const { policy } = harness({ failureThreshold: 2, quotaCooldownMs: 0 })
+
+    policy.record('quota')
+    policy.record('quota')
+
+    expect(policy.stats().circuit).toBe('open')
+  })
+
+  it('stays inert while the policy is disabled', () => {
+    const { policy } = harness({ enabled: false })
+
+    policy.record('quota')
+
+    expect(policy.stats().rejectedByQuota).toBe(0)
+    expect(policy.stats().quotaCooling).toBe(false)
+  })
+
+  it('is not retryable', () => {
+    expect(isRetryable(new JevQuotaError('quota'))).toBe(false)
   })
 })

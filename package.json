@@ -39,7 +39,8 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22",
+    "dsh": ">=0.1.6-alpha.2 <0.2.0"
   },
   "license": "MIT",
   "scripts": {
@@ -54,6 +55,7 @@
     "prepublishOnly": "npm run build"
   },
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     }

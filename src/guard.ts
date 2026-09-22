@@ -11,13 +11,24 @@
  */
 
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { verdictFor } from './confidence.ts'
 import type { ResolvedConfidenceConfig, ResolvedGuardConfig } from './config.ts'
 import type { ScoreAnswer } from './protocol.ts'
 import type { JevService } from './service.ts'
 
-/** What the gate decided about one pending call. */
+/**
+ * What the gate decided about one pending call.
+ *
+ * `revise` exists because `ask` is not the only way to be unsure. A call the
+ * gate judges risky but improvable should go back to the model with concrete
+ * rewrite guidance: that costs nothing and has no side effect when nobody is
+ * available to approve, whereas `ask` becomes a refusal when the host has no
+ * approval service mounted. The host has no distinct revise state, so the
+ * listener that consumes this maps it onto a denial carrying the guidance.
+ */
 export type GuardDecision =
   | { kind: 'allow' }
+  | { kind: 'revise'; reason: string }
   | { kind: 'ask'; reason: string }
   | { kind: 'deny'; reason: string }
 
@@ -27,6 +38,8 @@ export interface JevGuardStats {
   inspected: number
   /** Calls allowed, including allowances that fell back from `onError`. */
   allowed: number
+  /** Calls sent back for rewriting. */
+  revised: number
   /** Calls that need approval. */
   asked: number
   /** Calls refused, including refusals that fell back from `onError`. */
@@ -56,10 +69,16 @@ export interface JevGuardOptions {
 }
 
 /**
- * Decide whether one pending tool call may run, needs approval, or is refused.
+ * Decide whether one pending tool call may run, should be rewritten, needs
+ * approval, or is refused.
+ *
+ * Bands are read from the top down: `denyAt` wins over `reviseAt`, which wins
+ * over `askAt`. Because `reviseAt` defaults to `denyAt`, the revise band is
+ * empty until a deployment widens it.
  *
  * A gate that throws would break the agent loop, so every failure — including a
- * malformed answer — is converted into the configured `onError` outcome.
+ * malformed answer or a confidence outside the unit interval — is converted into
+ * the configured `onError` outcome.
  * Reasons name the tool, the level label, the score, the confidence, and the
  * failing error's machine-readable code, but never the arguments or a server
  * response body: a reason is model-visible and durable, so it stays free of
@@ -69,7 +88,7 @@ export class JevGuard {
   private readonly service: JevService
   private readonly config: ResolvedGuardConfig
   private readonly bands: ResolvedConfidenceConfig
-  private readonly counters = { inspected: 0, allowed: 0, asked: 0, denied: 0, errors: 0 }
+  private readonly counters = { inspected: 0, allowed: 0, revised: 0, asked: 0, denied: 0, errors: 0 }
 
   /** @param options - decision service, resolved gate configuration, and confidence bands. */
   constructor(options: JevGuardOptions) {
@@ -110,8 +129,15 @@ export class JevGuard {
 
   /**
    * Map one answer onto a decision and count it.
+   *
+   * The verdict for a low confidence comes from {@link verdictFor}, so the
+   * threshold semantics live in one place. That call rejects a confidence
+   * outside the unit interval, and the throw leaves this method with no counter
+   * incremented, so the `onError` fallback stays the only thing that counts the
+   * outcome.
    * @param answer - the validated score answer.
    * @returns the decision for this answer.
+   * @throws JevValidationError when the answer carries an unusable confidence.
    */
   private classify(answer: ScoreAnswer): GuardDecision {
     if (answer.score >= this.config.denyAt) {
@@ -123,6 +149,16 @@ export class JevGuard {
           + ' or ask the user to approve it explicitly.',
       }
     }
+    if (answer.score >= this.config.reviseAt) {
+      this.counters.revised += 1
+      return {
+        kind: 'revise',
+        reason: `The Jev risk gate scored this call ${this.describeScore(answer.score)}:`
+          + ' it looks risky, but there is probably a safer formulation.'
+          + ' Rewrite it before running it — narrow it to the specific path, table, or record'
+          + ' you actually need, try a dry run first, or back up what it would change.',
+      }
+    }
     if (answer.score >= this.config.askAt) {
       this.counters.asked += 1
       return {
@@ -131,7 +167,7 @@ export class JevGuard {
           + ' Confirm before running it.',
       }
     }
-    if (this.config.escalateOnLowConfidence && answer.confidence < this.bands.escalateBelow) {
+    if (this.config.escalateOnLowConfidence && this.escalates(answer.confidence)) {
       this.counters.asked += 1
       return {
         kind: 'ask',
@@ -142,6 +178,15 @@ export class JevGuard {
     }
     this.counters.allowed += 1
     return { kind: 'allow' }
+  }
+
+  /**
+   * Whether an answer is too uncertain to act on.
+   * @param confidence - confidence reported by the answer.
+   * @returns `true` when the configured bands call for escalation.
+   */
+  private escalates(confidence: number): boolean {
+    return verdictFor(confidence, this.bands) === 'escalate'
   }
 
   /**

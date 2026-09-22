@@ -1,12 +1,16 @@
 /** Call-admission policy: consecutive-failure circuit breaker and call spacing. @module dsh-jev/policy */
 
 import type { ResolvedPolicyConfig } from './config.ts'
-import { JevCircuitOpenError } from './errors.ts'
+import { JevCircuitOpenError, JevQuotaError } from './errors.ts'
 
 /** Observable counters and current breaker state. */
 export interface JevPolicyStats {
   /** Calls refused by the breaker, each one a request that was never sent. */
   rejectedByCircuit: number
+  /** Calls refused because a quota cooldown was in effect; also requests never sent. */
+  rejectedByQuota: number
+  /** Whether the quota cooldown still suppresses requests at snapshot time. */
+  quotaCooling: boolean
   /** Calls that waited for the minimum-interval gap. */
   spacedCalls: number
   /** Transitions from `closed` to `open`. */
@@ -53,6 +57,9 @@ export class JevPolicy {
   #openedAt = 0
   /** Time of the last admitted call, or `undefined` before the first one. */
   #lastAdmitAt: number | undefined = undefined
+  /** Time the quota cooldown ends, in `now()` milliseconds; 0 before any quota failure. */
+  #quotaUntil = 0
+  #rejectedByQuota = 0
   #rejectedByCircuit = 0
   #spacedCalls = 0
   #circuitOpens = 0
@@ -73,6 +80,9 @@ export class JevPolicy {
    */
   async admit(): Promise<void> {
     if (!this.#config.enabled) return
+    // Quota exhaustion is checked first: while the cooldown holds there is no
+    // point consulting the breaker or waiting out a spacing gap.
+    this.#checkQuota()
     this.#checkCircuit()
     await this.#space()
     this.#lastAdmitAt = this.#now()
@@ -85,13 +95,16 @@ export class JevPolicy {
    * which outcome to report.
    * @param outcome - `'success'` resets the failure streak, `'failure'` extends it.
    */
-  record(outcome: 'success' | 'failure'): void {
+  record(outcome: 'success' | 'failure' | 'quota'): void {
     if (!this.#config.enabled) return
     if (outcome === 'success') {
       this.#failures = 0
       if (this.#circuit === 'half-open') this.#circuit = 'closed'
       return
     }
+    // A quota failure extends the failure streak exactly like a transient one,
+    // and additionally stops calls until the cooldown elapses.
+    if (outcome === 'quota') this.#quotaUntil = this.#now() + this.#config.quotaCooldownMs
     if (this.#circuit === 'half-open') {
       this.#open()
       return
@@ -107,10 +120,32 @@ export class JevPolicy {
   stats(): Readonly<JevPolicyStats> {
     return {
       rejectedByCircuit: this.#rejectedByCircuit,
+      rejectedByQuota: this.#rejectedByQuota,
+      quotaCooling: this.#now() < this.#quotaUntil,
       spacedCalls: this.#spacedCalls,
       circuitOpens: this.#circuitOpens,
       circuit: this.#circuit,
     }
+  }
+
+  /**
+   * Refuse every call until the quota cooldown elapses.
+   *
+   * The wait is deliberately absent: a quota does not recover by waiting out a
+   * backoff, so the caller fails fast and lets the offline rule layer carry the
+   * protection instead of holding the agent loop for a retry that cannot work.
+   *
+   * The cooldown exists only while the policy is enabled: with `enabled: false`
+   * every method here is inert, so a quota failure is recorded but does not
+   * suppress the next call.
+   */
+  #checkQuota(): void {
+    const now = this.#now()
+    if (now >= this.#quotaUntil) return
+    this.#rejectedByQuota += 1
+    throw new JevQuotaError(
+      `Jev quota is exhausted; ${String(this.#quotaUntil - now)} ms remain before requests resume.`,
+    )
   }
 
   /**
