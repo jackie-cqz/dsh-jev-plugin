@@ -9,7 +9,6 @@ import { DecisionCard, DecisionCards } from '../src/client/components.ts'
 /** Every model variant, for the render-everything assertions. */
 const MODELS: readonly CardModel[] = [
   { kind: 'pending' },
-  { kind: 'empty' },
   { kind: 'noul', id: 'is_urgent', probability: 0.93 },
   {
     kind: 'choice',
@@ -39,7 +38,7 @@ describe('DecisionCard', () => {
   })
 
   it('renders the chosen label and every option', () => {
-    const html = render(MODELS[3] as CardModel)
+    const html = render(MODELS[2] as CardModel)
     expect(html).toContain('billing')
     expect(html).toContain('sales')
     expect(html).toContain('73%')
@@ -47,7 +46,7 @@ describe('DecisionCard', () => {
   })
 
   it('renders a score against its maximum with the level label', () => {
-    const html = render(MODELS[4] as CardModel)
+    const html = render(MODELS[3] as CardModel)
     expect(html).toContain('2.99/3')
     expect(html).toContain('紧急')
     expect(html).toContain('100%')
@@ -59,9 +58,8 @@ describe('DecisionCard', () => {
     expect(html).not.toContain('progressbar')
   })
 
-  it('renders the pending and empty placeholders', () => {
+  it('renders the pending placeholder', () => {
     expect(render({ kind: 'pending' })).toContain('judging')
-    expect(render({ kind: 'empty' })).toContain('no answers')
   })
 
   it('renders every variant without throwing', () => {
@@ -76,7 +74,7 @@ describe('DecisionCards', () => {
 
   it('renders one card per model, in order', () => {
     const html = renderToStaticMarkup(createElement(DecisionCards, { models: MODELS }))
-    expect(html.indexOf('judging')).toBeLessThan(html.indexOf('no answers'))
+    expect(html.indexOf('judging')).toBeLessThan(html.indexOf('is_urgent'))
     expect(html).toContain('is_urgent')
     expect(html).toContain('billing')
     expect(html).toContain('2.99/3')

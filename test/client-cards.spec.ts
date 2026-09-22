@@ -1,7 +1,7 @@
 /** Derivation of card models from rendered tool results. @module dsh-jev/test/client-cards */
 
 import { describe, expect, it } from 'vitest'
-import { toCardModels } from '../src/client/cards.ts'
+import { cardsFromMeta, toCardModels } from '../src/client/cards.ts'
 
 /** One rendered score result, exactly as the tool emits it. */
 const SCORE_TEXT = `score: 2.99/3 = 紧急 (confidence=0.99)
@@ -81,10 +81,10 @@ describe('toCardModels', () => {
     ])
   })
 
-  it('reports an empty answer map rather than guessing', () => {
-    expect(toCardModels(blocks('{"model":"m","answers":{},"usage":{}}'), false)).toEqual([
-      { kind: 'empty' },
-    ])
+  it('defers to the generic row for an empty answer map', () => {
+    // An empty list means "no card": the host keeps its generic tool row, which
+    // still shows the raw result.
+    expect(toCardModels(blocks('{"model":"m","answers":{},"usage":{}}'), false)).toEqual([])
   })
 
   it.each([
@@ -95,8 +95,8 @@ describe('toCardModels', () => {
     ['a truncated envelope', blocks('{\n  "model": "m",\n  "answer": {'), false],
     ['an envelope without answers', blocks('{"model":"m","usage":{}}'), false],
     ['an unrecognised answer type', blocks('{"model":"m","answer":{"type":"bogus"},"usage":{}}'), false],
-  ])('falls back to pending for %s', (_label, content, isError) => {
-    expect(toCardModels(content, isError)).toEqual([{ kind: 'pending' }])
+  ])('defers to the generic row for %s', (_label, content, isError) => {
+    expect(toCardModels(content, isError)).toEqual([])
   })
 
   it('skips an out-of-range probability instead of rendering it', () => {
@@ -115,5 +115,66 @@ describe('toCardModels', () => {
     const text = '{"model":"m","answer":{"type":"noul","noul":0.5,'
       + '"state":"sk-secret-value","arguments":{"token":"sk-secret-value"}},"usage":{}}'
     expect(JSON.stringify(toCardModels(blocks(text), false))).not.toContain('sk-secret-value')
+  })
+})
+
+describe('cardsFromMeta', () => {
+  it('derives every kind from the projected metadata', () => {
+    expect(cardsFromMeta({
+      tool: 'jev_evaluate',
+      answers: [
+        { kind: 'noul', id: 'is_urgent', probability: 0.97 },
+        {
+          kind: 'choice',
+          id: 'department',
+          chosen: 'billing',
+          confidence: 0.87,
+          probabilities: { billing: 0.73, sales: 0.07 },
+        },
+        {
+          kind: 'score',
+          id: 'urgency',
+          score: 2.99,
+          legend: { '0': '低', '3': '紧急' },
+          confidence: 0.99,
+          probabilities: { '3': 0.99 },
+        },
+      ],
+    }, false)).toEqual([
+      { kind: 'noul', id: 'is_urgent', probability: 0.97 },
+      {
+        kind: 'choice',
+        id: 'department',
+        chosen: 'billing',
+        confidence: 0.87,
+        options: [
+          { label: 'billing', probability: 0.73 },
+          { label: 'sales', probability: 0.07 },
+        ],
+      },
+      { kind: 'score', id: 'urgency', score: 2.99, max: 3, level: '紧急', confidence: 0.99 },
+    ])
+  })
+
+  it.each([
+    ['an error result', { answers: [{ kind: 'noul', id: 'x', probability: 1 }] }, true],
+    ['absent metadata', undefined, false],
+    ['a non-object', 'nope', false],
+    ['no answers array', { tool: 'jev_decide' }, false],
+    ['an empty answers array', { tool: 'jev_decide', answers: [] }, false],
+    ['an unrecognised kind', { answers: [{ kind: 'bogus', id: 'x' }] }, false],
+    ['an out-of-range probability', { answers: [{ kind: 'noul', id: 'x', probability: 2 }] }, false],
+    ['an answer without an id', { answers: [{ kind: 'noul', probability: 1 }] }, false],
+  ])('returns no cards for %s', (_label, meta, isError) => {
+    // An empty list hands the row back to the host rather than rendering noise.
+    expect(cardsFromMeta(meta, isError)).toEqual([])
+  })
+
+  it('carries no field the projection did not declare', () => {
+    const models = cardsFromMeta({
+      answers: [{ kind: 'noul', id: 'x', probability: 1, state: 'sk-secret-value' }],
+      state: 'sk-secret-value',
+    }, false)
+    expect(JSON.stringify(models)).not.toContain('sk-secret-value')
   })
 })

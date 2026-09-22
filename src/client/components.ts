@@ -62,8 +62,6 @@ export function DecisionCard(props: { model: CardModel }): ReactElement {
   switch (model.kind) {
     case 'pending':
       return createElement('div', { style: MUTED }, 'judging…')
-    case 'empty':
-      return createElement('div', { style: MUTED }, 'no answers')
     case 'noul':
       return createElement('div', null, barRow('noul', model.id, model.probability))
     case 'choice':

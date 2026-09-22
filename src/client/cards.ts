@@ -21,7 +21,6 @@ export interface CardOption {
 /** What a decision card renders. Free of React so it can be tested in Node. */
 export type CardModel =
   | { kind: 'pending' }
-  | { kind: 'empty' }
   | { kind: 'noul'; id: string; probability: number }
   | {
     kind: 'choice'
@@ -165,26 +164,81 @@ function answerModel(id: string, raw: unknown): CardModel | undefined {
  * Derive the cards for one finished Jev call.
  * @param content - the result's content blocks; the shape is treated as unknown.
  * @param isError - whether the result failed; a failure is never card-rendered.
- * @returns one model per answer, `pending` while nothing recognisable is present.
+ * @returns one model per answer, or an empty list when this plugin has nothing
+ * to visualise and the host should keep its generic tool row instead.
  */
 export function toCardModels(content: readonly unknown[], isError: boolean): readonly CardModel[] {
-  if (isError) return [{ kind: 'pending' }]
+  // An empty list means "this card does not take over": rendering a placeholder
+  // in place of the host's generic row would only add noise.
+  if (isError) return []
   const envelope = parseEnvelope(textOf(content))
-  if (envelope === undefined) return [{ kind: 'pending' }]
+  if (envelope === undefined) return []
 
   const answers = envelope['answers']
   if (isRecord(answers)) {
     const ids = Object.keys(answers)
-    if (ids.length === 0) return [{ kind: 'empty' }]
-    const derived = ids
+    if (ids.length === 0) return []
+    return ids
       .map(id => answerModel(id, answers[id]))
       .filter((model): model is CardModel => model !== undefined)
-    return derived.length === 0 ? [{ kind: 'pending' }] : derived
   }
 
   const single = envelope['answer']
   const derived = isRecord(single) ? answerModel('decision', single) : undefined
-  return derived === undefined ? [{ kind: 'pending' }] : [derived]
+  return derived === undefined ? [] : [derived]
+}
+
+/**
+ * Derive the cards from the host's presentation metadata.
+ *
+ * This is the primary path: the tools project a `JevCardMeta` onto every result,
+ * so the client reads structured answers rather than re-parsing rendered text.
+ * `meta.answers` is empty when the host had nothing to project, which means
+ * "no card" — the host then keeps its generic tool row.
+ * @param meta - the projected metadata; its shape is treated as unknown.
+ * @param isError - whether the result failed; a failure is never card-rendered.
+ * @returns one model per answer, or an empty list when there is nothing to show.
+ */
+export function cardsFromMeta(meta: unknown, isError: boolean): readonly CardModel[] {
+  if (isError) return []
+  if (!isRecord(meta)) return []
+  const answers = meta['answers']
+  if (!Array.isArray(answers) || answers.length === 0) return []
+  return answers
+    .map(entry => metaAnswerModel(entry))
+    .filter((model): model is CardModel => model !== undefined)
+}
+
+/** Derive one card from one projected answer. */
+function metaAnswerModel(raw: unknown): CardModel | undefined {
+  if (!isRecord(raw)) return undefined
+  const id = raw['id']
+  if (typeof id !== 'string' || id === '') return undefined
+  switch (raw['kind']) {
+    case 'noul': {
+      const probability = probabilityOf(raw['probability'])
+      return probability === undefined ? undefined : { kind: 'noul', id, probability }
+    }
+    case 'choice': {
+      const chosen = raw['chosen']
+      if (typeof chosen !== 'string' || chosen === '') return undefined
+      const confidence = probabilityOf(raw['confidence'])
+      return {
+        kind: 'choice',
+        id,
+        chosen,
+        options: optionsOf(raw['probabilities'], chosen),
+        ...confidence === undefined ? {} : { confidence },
+      }
+    }
+    case 'score': {
+      const score = raw['score']
+      if (typeof score !== 'number' || !Number.isFinite(score)) return undefined
+      return scoreModel(id, raw)
+    }
+    default:
+      return undefined
+  }
 }
 
 /** The id a single-answer envelope is rendered under. */

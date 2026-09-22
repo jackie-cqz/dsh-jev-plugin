@@ -11,7 +11,7 @@
  */
 
 import type { ReactElement } from 'react'
-import { toCardModels, type CardModel } from './cards.ts'
+import { cardsFromMeta, toCardModels, type CardModel } from './cards.ts'
 import { DecisionCards } from './components.ts'
 
 /** Client-side plugin name. */
@@ -24,6 +24,8 @@ export const inject = ['slots']
 interface ToolCallBlock {
   content?: readonly unknown[]
   isError?: boolean
+  /** Projected by the host from the tool definition; absent on older results. */
+  meta?: unknown
 }
 
 /** Props the tool-row slot passes to a registered component. */
@@ -51,8 +53,14 @@ interface ClientContext {
  * @returns the card stack, or `null` to let the host render its generic row.
  */
 function JevRow(props: ToolCallViewProps): ReactElement | null {
+  const isError = props.block.isError === true
   const content = Array.isArray(props.block.content) ? props.block.content : []
-  const models: readonly CardModel[] = toCardModels(content, props.block.isError === true)
+  // Prefer the projected metadata; a result recorded before the projection
+  // existed still carries the canonical envelope in its text.
+  const fromMeta = cardsFromMeta(props.block.meta, isError)
+  const models: readonly CardModel[] = fromMeta.length > 0
+    ? fromMeta
+    : toCardModels(content, isError)
   return DecisionCards({ models })
 }
 
