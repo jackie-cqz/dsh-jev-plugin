@@ -25,7 +25,8 @@ const manifest = JSON.parse(
   private?: boolean
   files?: string[]
   engines?: { node?: string; dsh?: string }
-  dsh?: { manifestVersion?: number; bundle?: { patch?: string } }
+  exports?: Record<string, { default?: string }>
+  dsh?: { manifestVersion?: number; bundle?: { patch?: string }; client?: { platform?: string } }
   peerDependencies?: Record<string, string>
 }
 
@@ -45,8 +46,15 @@ describe('package manifest', () => {
     expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
   })
 
-  it('ships the bundle patch, dist, and the two licence-adjacent files', () => {
-    expect(manifest.files).toEqual(['dist', 'cordis.patch.yml', 'README.md', 'LICENSE'])
+  it('ships the host bundle, the client bundle, and the two licence-adjacent files', () => {
+    // `lib` holds the Web client half, which DSH loads as a module-loader
+    // factory rather than through `main`; both entry points must ship.
+    expect(manifest.files).toEqual(['dist', 'lib', 'cordis.patch.yml', 'README.md', 'LICENSE'])
+  })
+
+  it('exposes the client half under its own export and manifest field', () => {
+    expect(manifest.exports?.['./client']?.default).toBe('./lib/client.js')
+    expect(manifest.dsh?.client).toEqual({ platform: 'web' })
   })
 
   it('stays publishable and names the peers the host provides', () => {

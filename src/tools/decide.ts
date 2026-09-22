@@ -4,6 +4,7 @@ import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { JevService } from '../service.ts'
 import { JevValidationError } from '../errors.ts'
 import type { JevQuestions } from '../protocol.ts'
+import { decideProjection } from '../presentation.ts'
 import { renderDecision } from '../render.ts'
 import {
   toDecideEnvelope,
@@ -111,6 +112,9 @@ export function createDecideTool(service: JevService): ToolDefinition {
     output: {
       schema: { type: 'json' },
       render: (_args, value) => renderDecision(value),
+      // Replayable card facts; the projection never returns undefined because
+      // the registry treats that as invalid output and fails the call.
+      presentationMeta: (_args, value) => decideProjection(value),
     },
     async execute(args, exec) {
       const state = validateState(args.state)

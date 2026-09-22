@@ -29,6 +29,7 @@ const EXPECTED_FILES = [
   'cordis.patch.yml',
   'dist/index.d.ts',
   'dist/index.js',
+  'lib/client.js',
   'package.json',
 ]
 
@@ -167,11 +168,11 @@ check(
 
 // --- build outputs are non-empty on disk and in the tarball ------------------
 
-const dist = ['dist/index.js', 'dist/index.d.ts']
+const dist = ['dist/index.js', 'dist/index.d.ts', 'lib/client.js']
 const emptyOnDisk = dist.filter(path => !existsSync(join(PACKAGE_ROOT, path)) || statSync(join(PACKAGE_ROOT, path)).size === 0)
 const emptyInPack = report.files.filter(file => dist.includes(file.path) && file.size === 0).map(file => file.path)
 check(
-  'dist/index.js and dist/index.d.ts are present and non-empty',
+  'dist and the client artifact are present and non-empty',
   emptyOnDisk.length === 0 && emptyInPack.length === 0,
   emptyOnDisk.length === 0 && emptyInPack.length === 0
     ? report.files.filter(file => dist.includes(file.path)).map(file => `${file.path} ${file.size} B`).join(', ')

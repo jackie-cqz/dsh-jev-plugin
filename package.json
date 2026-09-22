@@ -27,6 +27,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
+    "./client": {
+      "default": "./lib/client.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
@@ -34,6 +37,7 @@
   },
   "files": [
     "dist",
+    "lib",
     "cordis.patch.yml",
     "README.md",
     "LICENSE"
@@ -44,10 +48,11 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node scripts/build-client.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "build:client": "node scripts/build-client.mjs",
     "smoke": "node scripts/smoke.mjs",
     "cases": "node scripts/jev-cases.mjs",
     "check:pack": "node scripts/check-pack.mjs",
@@ -58,6 +63,9 @@
     "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
     }
   },
   "dependencies": {
@@ -84,6 +92,10 @@
     "@deepseek-ai/dsh-util-values": "0.1.6-alpha.2",
     "@deepseek-ai/schemastery": "3.18.2",
     "@types/node": "^22.10.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "tsdown": "^0.22.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"

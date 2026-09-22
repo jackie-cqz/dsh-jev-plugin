@@ -2,6 +2,7 @@
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { JevService } from '../service.ts'
+import { evaluateProjection } from '../presentation.ts'
 import { renderDecision } from '../render.ts'
 import { toEvaluateEnvelope, validateQuestions, validateState } from '../validation.ts'
 
@@ -47,6 +48,8 @@ export function createEvaluateTool(service: JevService): ToolDefinition {
     output: {
       schema: { type: 'json' },
       render: (_args, value) => renderDecision(value),
+      // Replayable card facts; see the projection contract in presentation.ts.
+      presentationMeta: (_args, value) => evaluateProjection(value),
     },
     async execute(args, exec) {
       const state = validateState(args.state)

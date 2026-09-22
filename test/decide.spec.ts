@@ -107,6 +107,37 @@ describe('createDecideTool', () => {
     expect(tool.description).toContain('jev_evaluate')
   })
 
+  it('projects the card facts a Web decision card rebuilds from', () => {
+    const { service } = fakeService(RESPONSE)
+    const tool = createDecideTool(service)
+    const value = {
+      model: 'jev-1.13.0',
+      answer: { type: 'score', score: 2.99, legend: { 3: 'critical' }, probabilities: { 3: 0.99 }, confidence: 0.99 },
+      usage: { input_tokens: 1, output_tokens: 2 },
+    }
+
+    const meta = tool.output.presentationMeta?.({}, value)
+
+    expect(meta).toEqual({
+      tool: 'jev_decide',
+      answers: [{
+        kind: 'score',
+        id: 'decision',
+        score: 2.99,
+        legend: { 3: 'critical' },
+        confidence: 0.99,
+        probabilities: { 3: 0.99 },
+      }],
+    })
+  })
+
+  it('never projects undefined, which the registry treats as invalid output', () => {
+    const { service } = fakeService(RESPONSE)
+    const tool = createDecideTool(service)
+
+    expect(tool.output.presentationMeta?.({}, { model: 'm' })).toEqual({ tool: 'jev_decide', answers: [] })
+  })
+
   it('renders a summary line above the canonical JSON', () => {
     const { service } = fakeService(RESPONSE)
     const tool = createDecideTool(service)

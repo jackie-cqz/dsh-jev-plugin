@@ -73,6 +73,21 @@ describe('createEvaluateTool', () => {
     expect(tool.description).toContain('instructions')
   })
 
+  it('projects the card facts a Web decision card rebuilds from', () => {
+    const { service } = fakeService(RESPONSE)
+    const tool = createEvaluateTool(service)
+    const value = {
+      model: 'jev-1.13.0',
+      answers: { department: { type: 'choice', choice: 'billing', probabilities: { billing: 0.9 } } },
+      usage: { input_tokens: 1, output_tokens: 2 },
+    }
+
+    expect(tool.output.presentationMeta?.({}, value)).toEqual({
+      tool: 'jev_evaluate',
+      answers: [{ kind: 'choice', id: 'department', chosen: 'billing', probabilities: { billing: 0.9 } }],
+    })
+  })
+
   it('renders one summary line per answer above the canonical JSON', () => {
     const { service } = fakeService(RESPONSE)
     const tool = createEvaluateTool(service)
