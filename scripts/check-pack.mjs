@@ -15,7 +15,7 @@
  * Exits 0 when every check passes, 1 otherwise. Reads no third-party modules.
  */
 
-import { execFileSync } from 'node:child_process'
+import { runNpm } from './npm.mjs'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -26,6 +26,7 @@ const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const EXPECTED_FILES = [
   'LICENSE',
   'README.md',
+  'README_zh.md',
   'cordis.patch.yml',
   'dist/index.d.ts',
   'dist/index.js',
@@ -73,13 +74,12 @@ function check(label, ok, detail) {
  * @returns the raw stdout of the successful run.
  */
 function runPackDryRun() {
-  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
   const args = [
-    'pack', '--dry-run', '--json',
+    'pack', '--dry-run', '--json', '--ignore-scripts',
     '--loglevel=notice',
     '--cache', join(PACKAGE_ROOT, '.npm-cache'),
   ]
-  return execFileSync(npm, args, { cwd: PACKAGE_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  return runNpm(args, { cwd: PACKAGE_ROOT })
 }
 
 /**
@@ -156,6 +156,8 @@ const declared = [
   ['types', manifest.types],
   ['exports["."].types', manifest.exports?.['.']?.types],
   ['exports["."].default', manifest.exports?.['.']?.default],
+  ['exports["./client"].default', manifest.exports?.['./client']?.default],
+  ['dsh.bundle.patch', manifest.dsh?.bundle?.patch],
 ].filter(([, target]) => typeof target === 'string')
 const normalized = declared.map(([field, target]) => [field, target.replace(/^\.\//, '')])
 const unresolved = normalized.filter(([, target]) => !packed.has(target))
@@ -181,6 +183,26 @@ check(
 )
 
 // --- summary -----------------------------------------------------------------
+
+check('DSH manifest and patch are declared',
+  manifest.dsh?.manifestVersion === 1 && manifest.dsh?.client?.platform === 'web'
+    && manifest.files.includes('cordis.patch.yml')
+    && manifest.dsh?.bundle?.patch === './cordis.patch.yml', '')
+const patch = readFileSync(join(PACKAGE_ROOT, 'cordis.patch.yml'), 'utf8')
+check('bundle patch names this package', patch.includes(`name: ${manifest.name}`) && patch.includes('id: tool-jev'), '')
+const readme = readFileSync(join(PACKAGE_ROOT, 'README.md'), 'utf8')
+check('README covers installation, configuration, errors and compatibility',
+  ['## Installation', '## Configuration', '## Errors', '## Compatibility'].every(text => readme.includes(text)), '')
+const readmeZh = readFileSync(join(PACKAGE_ROOT, 'README_zh.md'), 'utf8')
+check('Chinese README covers installation, configuration, errors and compatibility',
+  ['## 安装', '## 配置', '## 错误处理', '## 兼容矩阵'].every(text => readmeZh.includes(text)), '')
+check('READMEs link to each other',
+  readme.includes('[简体中文](./README_zh.md)') && readmeZh.includes('[English](./README.md)'), '')
+const suspicious = report.files.filter(file => {
+  const text = readFileSync(join(PACKAGE_ROOT, file.path), 'utf8')
+  return /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\b(?:ghp_[A-Za-z0-9]{36}|npm_[A-Za-z0-9]{36})\b/.test(text)
+}).map(file => file.path)
+check('no recognized private keys or access tokens in payload', suspicious.length === 0, suspicious.join(', '))
 
 const failed = results.filter(result => !result.ok)
 console.log('')

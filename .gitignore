@@ -3,3 +3,10 @@ dist/
 *.tsbuildinfo
 .npm-cache/
 lib/
+.release-smoke-*/
+
+# Private design, planning, and handoff notes (keep local).
+/PLAN*.md
+/HANDOFF*.md
+/SPEC*.md
+/.private-audit/

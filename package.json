@@ -41,6 +41,7 @@
     "skills",
     "cordis.patch.yml",
     "README.md",
+    "README_zh.md",
     "LICENSE"
   ],
   "engines": {
@@ -57,8 +58,10 @@
     "smoke": "node scripts/smoke.mjs",
     "cases": "node scripts/jev-cases.mjs",
     "check:pack": "node scripts/check-pack.mjs",
+    "check:install": "node scripts/check-install.mjs",
+    "check:release": "npm run typecheck && npm test && npm run build && npm run check:pack && npm run check:install",
     "prepare": "npm run build",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run check:release"
   },
   "dsh": {
     "manifestVersion": 1,
@@ -97,6 +100,7 @@
     "@types/react-dom": "^19.3.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "rolldown": "1.2.9",
     "tsdown": "^0.22.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"

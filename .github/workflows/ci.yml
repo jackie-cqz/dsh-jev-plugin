@@ -1,14 +1,7 @@
 # CI for the standalone dsh-jev-plugin package.
 #
-# LOCATION WARNING — read this before relying on the result.
-# This file sits inside the dsh-jev/ SUBDIRECTORY, and GitHub only ever reads
-# .github/workflows/ at a REPOSITORY ROOT. Inside the current deepseek-harness
-# monorepo it is INERT: it does not run, and no badge from it means anything.
-# It starts running only after dsh-jev-plugin becomes its own repository — the
-# distribution shape SPEC.md section 9 plans for. At that point move this file
-# to the new repository root unchanged.
-#
-# Scope: install, typecheck, test, build, and a packaging dry run.
+# Keep this workflow at the standalone repository root.
+# Scope: install, typecheck, test, build, strict packaging and tarball install.
 # scripts/smoke.mjs and scripts/jev-cases.mjs are deliberately absent: they call
 # the live TypeSafe API and need TYPESAFE_API_KEY. The vitest suite is fully
 # mocked and must stay offline, so CI never needs a secret.
@@ -24,8 +17,8 @@ permissions:
 
 jobs:
   verify:
-    name: verify (Node ${{ matrix.node }})
-    runs-on: ubuntu-latest
+    name: verify (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +26,7 @@ jobs:
         # both ends of the supported range are worth testing. Node 18/20 are
         # deliberately excluded: they are below the declared floor.
         node: ['22', '24']
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,4 +62,7 @@ jobs:
       # Guards the published file set: dist/, cordis.patch.yml, README, LICENSE.
       # Needs no credentials.
       - name: Verify publishable tarball
-        run: npm pack --dry-run
+        run: npm run check:pack
+
+      - name: Install and exercise published package (mock API)
+        run: npm run check:install
