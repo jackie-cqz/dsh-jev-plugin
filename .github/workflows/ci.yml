@@ -1,0 +1,71 @@
+# CI for the standalone dsh-jev-plugin package.
+#
+# LOCATION WARNING — read this before relying on the result.
+# This file sits inside the dsh-jev/ SUBDIRECTORY, and GitHub only ever reads
+# .github/workflows/ at a REPOSITORY ROOT. Inside the current deepseek-harness
+# monorepo it is INERT: it does not run, and no badge from it means anything.
+# It starts running only after dsh-jev-plugin becomes its own repository — the
+# distribution shape SPEC.md section 9 plans for. At that point move this file
+# to the new repository root unchanged.
+#
+# Scope: install, typecheck, test, build, and a packaging dry run.
+# scripts/smoke.mjs and scripts/jev-cases.mjs are deliberately absent: they call
+# the live TypeSafe API and need TYPESAFE_API_KEY. The vitest suite is fully
+# mocked and must stay offline, so CI never needs a secret.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # package.json declares engines.node ">=22", so the floor is Node 22 and
+        # both ends of the supported range are worth testing. Node 18/20 are
+        # deliberately excluded: they are below the declared floor.
+        node: ['22', '24']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # --legacy-peer-deps is REQUIRED here, not cosmetic. npm 10.x's arborist
+      # crashes while resolving vitest's peer dependencies with
+      # "Cannot read properties of null (reading 'edgesOut')". `npm ci` walks the
+      # same code path, so the flag belongs on every install in this package.
+      # This step also runs `prepare` (npm run build), so a broken build fails
+      # the install instead of surfacing later.
+      #
+      # `npm ci` also refuses to run when package-lock.json disagrees with
+      # package.json. After any dependency edit, re-run
+      # `npm install --legacy-peer-deps` and commit the refreshed lockfile.
+      - name: Install
+        run: npm ci --legacy-peer-deps
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Guards the published file set: dist/, cordis.patch.yml, README, LICENSE.
+      # Needs no credentials.
+      - name: Verify publishable tarball
+        run: npm pack --dry-run
