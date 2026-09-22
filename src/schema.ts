@@ -12,6 +12,7 @@ import {
   DEFAULT_MAX_STATE_CHARS,
   DEFAULT_MODEL,
   DEFAULT_POLICY,
+  DEFAULT_QUOTA_COOLDOWN_MS,
   DEFAULT_RETRY,
   DEFAULT_ROUTING,
   DEFAULT_REVIEW,
@@ -31,6 +32,8 @@ export const ConfigSchema: z<Config> = z.object({
   baseURL: z.string().default(DEFAULT_BASE_URL).description('TypeSafe API base URL.'),
   model: z.string().default(DEFAULT_MODEL).description('Default Jev model id, overridable per tool call.'),
   timeoutMs: z.number().min(1).default(DEFAULT_TIMEOUT_MS).description('Per-call timeout in milliseconds.'),
+  quotaCooldownMs: z.number().min(0).default(DEFAULT_QUOTA_COOLDOWN_MS)
+    .description('Milliseconds requests stop after the API reports quota exhaustion; 0 disables it.'),
   retry: z.object({
     maxAttempts: z.number().step(1).min(1).default(DEFAULT_RETRY.maxAttempts)
       .description('Total attempts per call, including the first.'),
@@ -48,8 +51,6 @@ export const ConfigSchema: z<Config> = z.object({
       .description('Milliseconds the circuit stays open before one probe call.'),
     minIntervalMs: z.number().min(0).default(DEFAULT_POLICY.minIntervalMs)
       .description('Minimum milliseconds between two calls; 0 disables the spacing.'),
-    quotaCooldownMs: z.number().min(0).default(DEFAULT_POLICY.quotaCooldownMs)
-      .description('Milliseconds the breaker stops sending after the API reports quota exhaustion.'),
   }).description('Call-admission policy; disabled by default.'),
   cache: z.object({
     enabled: z.boolean().default(DEFAULT_CACHE.enabled)

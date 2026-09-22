@@ -29,13 +29,6 @@ export interface PolicyConfig {
   openMs?: number
   /** Minimum milliseconds between two calls; 0 means no spacing; defaults to 200. */
   minIntervalMs?: number
-  /**
-   * Milliseconds the breaker stops sending requests after the API reports quota
-   * exhaustion; defaults to 900000. Unlike a transient failure, an exhausted
-   * quota does not recover by retrying, so calls fail fast and the offline rule
-   * layer keeps working instead.
-   */
-  quotaCooldownMs?: number
 }
 
 /** Call-admission policy with every field resolved. */
@@ -253,6 +246,17 @@ export interface Config {
   model?: string
   /** Per-call timeout in milliseconds. */
   timeoutMs?: number
+  /**
+   * Milliseconds the plugin stops sending requests after the API reports quota
+   * exhaustion; `0` disables the cooldown. Defaults to 900000.
+   *
+   * This sits here rather than under `policy` because an exhausted quota does not
+   * recover by retrying, and because a deployment that enables only the offline
+   * rule layer still needs the cooldown: the rule layer exists precisely for the
+   * no-key and out-of-quota cases, and without this it would send a request per
+   * refused call just to collect another `402`.
+   */
+  quotaCooldownMs?: number
   /** Retry policy overrides. */
   retry?: RetryConfig
   /** Call-admission policy; disabled unless enabled here. */
@@ -306,13 +310,15 @@ export const DEFAULT_RETRY: ResolvedRetryConfig = {
   maxDelayMs: 5_000,
 }
 
+/** Default quota cooldown, in milliseconds. */
+export const DEFAULT_QUOTA_COOLDOWN_MS = 900_000
+
 /** Default call-admission policy; `enabled: false` keeps MVP behavior. */
 export const DEFAULT_POLICY: ResolvedPolicyConfig = {
   enabled: false,
   failureThreshold: 5,
   openMs: 30_000,
   minIntervalMs: 200,
-  quotaCooldownMs: 900_000,
 }
 
 /** Default response cache; `enabled: false` keeps MVP behavior. */
@@ -426,6 +432,8 @@ export interface ResolvedConfig {
   model: string
   /** Per-call timeout in milliseconds. */
   timeoutMs: number
+  /** Quota cooldown in milliseconds; `0` disables it. */
+  quotaCooldownMs: number
   /** Retry policy with every field resolved. */
   retry: ResolvedRetryConfig
   /** Call-admission policy with every field resolved. */
@@ -826,6 +834,10 @@ export function resolveConfig(config: Config = {}, env: NodeJS.ProcessEnv = proc
     baseURL: normalizeBaseURL(config.baseURL ?? DEFAULT_BASE_URL),
     model: requireNonBlankString(config.model ?? DEFAULT_MODEL, 'model'),
     timeoutMs: requirePositiveNumber(config.timeoutMs ?? DEFAULT_TIMEOUT_MS, 'timeoutMs'),
+    quotaCooldownMs: requireNonNegativeNumber(
+      config.quotaCooldownMs ?? DEFAULT_QUOTA_COOLDOWN_MS,
+      'quotaCooldownMs',
+    ),
     retry: {
       maxAttempts: requirePositiveNumber(
         config.retry?.maxAttempts ?? DEFAULT_RETRY.maxAttempts,
@@ -850,10 +862,6 @@ export function resolveConfig(config: Config = {}, env: NodeJS.ProcessEnv = proc
       minIntervalMs: requireNonNegativeNumber(
         config.policy?.minIntervalMs ?? DEFAULT_POLICY.minIntervalMs,
         'policy.minIntervalMs',
-      ),
-      quotaCooldownMs: requireNonNegativeNumber(
-        config.policy?.quotaCooldownMs ?? DEFAULT_POLICY.quotaCooldownMs,
-        'policy.quotaCooldownMs',
       ),
     },
     cache: {

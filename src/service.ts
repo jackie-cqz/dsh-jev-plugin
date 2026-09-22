@@ -48,6 +48,11 @@ export interface JevServiceStats {
   /** Calls that failed for a service-side reason (see {@link isServiceFailure}). */
   failures: number
   /**
+   * Calls refused because an exhausted-quota cooldown was still in effect. Each
+   * one is a request that was never sent, so it is not counted in `calls`.
+   */
+  quotaRejections: number
+  /**
    * Retries performed by transports this service constructed, counted as they
    * were about to back off. A client passed through `deps.client` owns its own
    * retry loop and cannot be observed, so its retries are absent from this count.
@@ -176,6 +181,8 @@ export class JevService extends Service {
   private readonly counters = {
     calls: 0,
     failures: 0,
+    quotaUntil: 0,
+    quotaRejections: 0,
     retries: 0,
     tokens: { input: 0, output: 0 },
     lastLatencyMs: 0,
@@ -228,6 +235,17 @@ export class JevService extends Service {
       throw new JevValidationError(
         `state is ${chars} characters, which exceeds the configured maxStateChars of `
         + `${this.config.maxStateChars}; shorten the state or raise maxStateChars.`,
+      )
+    }
+    // An exhausted quota never recovers by retrying, so a cooling service fails
+    // fast: neither the response cache nor the admission policy is worth
+    // consulting when the answer is already known. The offline rule layer is what
+    // carries protection during the cooldown.
+    if (this.config.quotaCooldownMs > 0 && this.now() < this.counters.quotaUntil) {
+      this.counters.quotaRejections += 1
+      throw new JevQuotaError(
+        'Jev quota is exhausted; requests resume once the configured quotaCooldownMs of '
+        + `${String(this.config.quotaCooldownMs)} ms has elapsed.`,
       )
     }
     const request: SystemOneRequest = {
@@ -292,11 +310,14 @@ export class JevService extends Service {
     } catch (error) {
       const serviceFailure = isServiceFailure(error)
       if (serviceFailure) this.counters.failures += 1
-      // Quota exhaustion opens a cooldown as well as extending the streak, so it
-      // is reported separately from a transient failure.
-      this.policy.record(
-        serviceFailure ? error instanceof JevQuotaError ? 'quota' : 'failure' : 'success',
-      )
+      // An exhausted quota suppresses further requests for a cooldown. Unlike a
+      // transient failure it does not recover by retrying, and it is tracked here
+      // rather than in the admission policy so that it applies even when that
+      // policy is disabled.
+      if (error instanceof JevQuotaError && this.config.quotaCooldownMs > 0) {
+        this.counters.quotaUntil = this.now() + this.config.quotaCooldownMs
+      }
+      this.policy.record(serviceFailure ? 'failure' : 'success')
       this.emit({
         outcome: 'failure',
         model: undefined,
@@ -411,6 +432,7 @@ export class JevService extends Service {
     return {
       calls: this.counters.calls,
       failures: this.counters.failures,
+      quotaRejections: this.counters.quotaRejections,
       retries: this.counters.retries,
       tokens: { input: this.counters.tokens.input, output: this.counters.tokens.output },
       lastLatencyMs: this.counters.lastLatencyMs,

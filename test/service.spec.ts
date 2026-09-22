@@ -54,12 +54,13 @@ describe('JevService registration', () => {
     expect(ctx.jev.stats()).toEqual({
       calls: 0,
       failures: 0,
+      quotaRejections: 0,
       retries: 0,
       tokens: { input: 0, output: 0 },
       lastLatencyMs: 0,
       totalLatencyMs: 0,
       models: [],
-      policy: { rejectedByCircuit: 0, rejectedByQuota: 0, quotaCooling: false, spacedCalls: 0, circuitOpens: 0, circuit: 'closed' },
+      policy: { rejectedByCircuit: 0, spacedCalls: 0, circuitOpens: 0, circuit: 'closed' },
       cache: { hits: 0, misses: 0, entries: 0 },
     })
   })
@@ -688,9 +689,10 @@ describe('retry auditing', () => {
 describe('quota exhaustion', () => {
   it('counts the failure and stops reaching the transport during the cooldown', async () => {
     const { client, calls } = fakeClient(async () => { throw new JevQuotaError('quota exhausted') })
-    // The cooldown lives in the admission policy, so it must be enabled for a
-    // quota failure to suppress later calls.
-    const ctx = mount({ policy: { enabled: true } }, { client })
+    // The admission policy is explicitly off here: the cooldown lives in the
+    // service precisely so that a deployment running only the offline rule layer
+    // still gets it, which is the whole reason it is not a policy setting.
+    const ctx = mount({ policy: { enabled: false } }, { client })
 
     await expect(
       ctx.jev.callSystemOne({ state: 'x', questions: { decision: NOUL_QUESTION } }),
@@ -698,15 +700,43 @@ describe('quota exhaustion', () => {
 
     expect(ctx.jev.stats().failures).toBe(1)
     expect(calls).toHaveLength(1)
-    const callsBefore = ctx.jev.stats().calls
 
-    // The second attempt never reaches the injected transport: the cooldown
-    // refuses it before dispatch, and a refusal is not a call.
     await expect(
       ctx.jev.callSystemOne({ state: 'x', questions: { decision: NOUL_QUESTION } }),
     ).rejects.toBeInstanceOf(JevQuotaError)
 
+    // A refusal is not a call: the transport is untouched, and the counter says
+    // how many requests the cooldown saved.
     expect(calls).toHaveLength(1)
-    expect(ctx.jev.stats().calls).toBe(callsBefore)
+    expect(ctx.jev.stats().calls).toBe(1)
+    expect(ctx.jev.stats().quotaRejections).toBe(1)
+  })
+
+  it('resumes once the cooldown elapses', async () => {
+    let now = 1_000
+    const { client, calls } = fakeClient(async () => { throw new JevQuotaError('quota exhausted') })
+    const ctx = mount({ quotaCooldownMs: 60_000 }, { client, now: () => now })
+
+    const call = () => ctx.jev.callSystemOne({ state: 'x', questions: { decision: NOUL_QUESTION } })
+    await expect(call()).rejects.toBeInstanceOf(JevQuotaError)
+    await expect(call()).rejects.toBeInstanceOf(JevQuotaError)
+    expect(calls).toHaveLength(1)
+
+    now += 60_000
+    await expect(call()).rejects.toBeInstanceOf(JevQuotaError)
+    // The cooldown expired, so this attempt really reached the transport.
+    expect(calls).toHaveLength(2)
+  })
+
+  it('treats a zero cooldown as no cooldown', async () => {
+    const { client, calls } = fakeClient(async () => { throw new JevQuotaError('quota exhausted') })
+    const ctx = mount({ quotaCooldownMs: 0 }, { client })
+
+    const call = () => ctx.jev.callSystemOne({ state: 'x', questions: { decision: NOUL_QUESTION } })
+    await expect(call()).rejects.toBeInstanceOf(JevQuotaError)
+    await expect(call()).rejects.toBeInstanceOf(JevQuotaError)
+
+    expect(calls).toHaveLength(2)
+    expect(ctx.jev.stats().quotaRejections).toBe(0)
   })
 })

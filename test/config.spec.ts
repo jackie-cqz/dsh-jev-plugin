@@ -5,6 +5,7 @@ import {
   DEFAULT_BASE_URL,
   DEFAULT_MODEL,
   DEFAULT_RETRY,
+  DEFAULT_QUOTA_COOLDOWN_MS,
   DEFAULT_TIMEOUT_MS,
   resolveApiKey,
   resolveConfig,
@@ -19,6 +20,7 @@ describe('documented defaults', () => {
     expect(DEFAULT_MODEL).toBe('jev-latest')
     expect(DEFAULT_TIMEOUT_MS).toBe(10_000)
     expect(DEFAULT_RETRY).toEqual({ maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 5_000 })
+    expect(DEFAULT_QUOTA_COOLDOWN_MS).toBe(900_000)
   })
 })
 
@@ -31,7 +33,16 @@ describe('resolveConfig defaults', () => {
     expect(resolved.baseURL).toBe(DEFAULT_BASE_URL)
     expect(resolved.model).toBe(DEFAULT_MODEL)
     expect(resolved.timeoutMs).toBe(DEFAULT_TIMEOUT_MS)
+    // The quota cooldown is a service-level field, not part of the admission policy:
+    // it must apply even when `policy.enabled` is false.
+    expect(resolved.quotaCooldownMs).toBe(DEFAULT_QUOTA_COOLDOWN_MS)
+    expect(resolved.policy).not.toHaveProperty('quotaCooldownMs')
     expect(resolved.retry).toEqual(DEFAULT_RETRY)
+  })
+
+  it('accepts an explicit zero cooldown and rejects a negative one', () => {
+    expect(resolveConfig({ quotaCooldownMs: 0 }, {}).quotaCooldownMs).toBe(0)
+    expect(() => resolveConfig({ quotaCooldownMs: -1 }, {})).toThrow(/quotaCooldownMs/)
   })
 
   it('keeps the remaining retry defaults for a partial override', () => {

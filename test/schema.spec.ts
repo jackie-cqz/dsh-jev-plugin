@@ -53,9 +53,10 @@ describe('ConfigSchema acceptance', () => {
       model: 'jev-1.13.0',
       timeoutMs: 250,
       retry: { maxAttempts: 2, baseDelayMs: 10, maxDelayMs: 20 },
-      policy: { enabled: true, failureThreshold: 3, openMs: 1_000, minIntervalMs: 50, quotaCooldownMs: 900_000 },
+      policy: { enabled: true, failureThreshold: 3, openMs: 1_000, minIntervalMs: 50 },
       cache: { enabled: true, maxEntries: 10, ttlMs: 5_000 },
       maxStateChars: 1_000,
+      quotaCooldownMs: 900_000,
       confidence: { approveAt: 0.9, escalateBelow: 0.4 },
       guard: {
         enabled: true,
