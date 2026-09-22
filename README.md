@@ -43,12 +43,15 @@ If Node times out during the TLS handshake while `curl` connects successfully, t
 For a local checkout, first run `npm ci --legacy-peer-deps` in the plugin directory, then replace the example path below with its actual location:
 
 ```sh
+dsh --profile jev-dev --from-default-profile web --dump-config
 dsh plugin --profile jev-dev add /path/to/dsh-jev-plugin
 dsh --profile jev-dev --dump-config   # Look for tool-jev
 dsh --profile jev-dev
 ```
 
-From GitHub, once the repository is available (replace `<commit-sha>` with the desired revision):
+The first command initializes a new Web profile; run it only once for an unused profile name. Adding a plugin to a new name without selecting the Web template creates a base-only profile. If your profile already exists, omit initialization.
+
+From GitHub (replace `<commit-sha>` with the desired revision; initialize the Web profile as above first):
 
 ```sh
 dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#<commit-sha>

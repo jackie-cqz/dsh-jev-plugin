@@ -43,15 +43,19 @@ Jev 不是聊天模型：它不生成文本，只返回结构化判断。本插�
 本地源码安装（将路径替换为实际目录，先在插件目录执行 `npm ci --legacy-peer-deps`）：
 
 ```sh
+dsh --profile jev-dev --from-default-profile web --dump-config
 dsh plugin --profile jev-dev add /path/to/dsh-jev-plugin
 dsh --profile jev-dev --dump-config   # 应能看到 tool-jev 这一行
 dsh --profile jev-dev
 ```
 
-从 GitHub 安装（仓库公开后，将 `<commit-sha>` 替换为目标提交）：
+第一条命令用 Web 模板初始化新 profile，只对未使用的名称执行一次。直接给新名称添加插件只会创建基础 profile，不会启用 Web 应用。已有 Web profile 可跳过初始化。
+
+从 GitHub 安装（先按上面初始化 Web profile，再将 `<commit-sha>` 替换为目标提交）：
 
 ```sh
-dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#<commit-sha>```
+dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#<commit-sha>
+```
 
 从 Git 源码安装时，pnpm 会先执行本包的 `prepare` 脚本（`npm run build`）再加载；若 pnpm 提示构建脚本被拦截，按它打印的键名把该包加入 profile 的 `pnpm-workspace.yaml` 下的 `allowBuilds` 后重试。
 
