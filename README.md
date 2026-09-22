@@ -90,8 +90,8 @@ dsh plugin --profile jev-dev add dsh-jev-plugin
 | `guard.tools` | `[]` | 闸门检查的工具名；空列表表示检查全部 |
 | `guard.question` | 内置风险问题 | 每次调用问 Jev 的问题 |
 | `guard.levels` | `["low","medium","high","critical"]` | 有序风险等级，2–10 个 |
-| `guard.denyAt` | 最高级下标 | 风险分达到此级即拒绝 |
-| `guard.askAt` | 次高级下标 | 风险分达到此级需人工确认 |
+| `guard.denyAt` | `2` | 风险分达到此级即拒绝 |
+| `guard.askAt` | `1` | 风险分达到此级需人工确认 |
 | `guard.escalateOnLowConfidence` | `true` | 置信度低于 `confidence.escalateBelow` 时转为人工确认 |
 | `guard.reviseAt` | 最高级下标 | 风险分达到此级改为**拒绝并附改写指引**；默认等于 `denyAt`，即**默认不启用**，要生效必须显式放宽 |
 | `guard.onError` | `"allow"` | 闸门自身失败时的行为：`allow` 为 fail-open，`deny` 为 fail-closed |
@@ -109,6 +109,7 @@ dsh plugin --profile jev-dev add dsh-jev-plugin
 | `telemetry.sampleRate` | `1` | 记录抽样比例（0–1） |
 | `telemetry.errorRateAlert` | `0.5` | 错误率达到此值判为 degraded |
 | `telemetry.alertMinCalls` | `10` | 样本少于此数不下健康结论 |
+
 
 `maxStateChars` 超限是**拒绝**而不是截断——截断会静默改变被判断的内容，可能让决策基于残缺文本。`policy`、`cache`、`guard` 默认关闭，开启前行为与最初版本一致。
 

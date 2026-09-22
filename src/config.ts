@@ -348,10 +348,15 @@ export const DEFAULT_GUARD: ResolvedGuardConfig = {  enabled: false,
     + 'leak secrets or personal data, affect production systems, spend money, or is '
     + 'otherwise difficult to reverse.',
   levels: [...DEFAULT_GUARD_LEVELS],
-  denyAt: DEFAULT_GUARD_LEVELS.length - 1,
-  askAt: DEFAULT_GUARD_LEVELS.length - 2,
+  // Calibrated against 100 real shell commands drawn from this machine's
+  // session logs (median 0.54, p90 1.61, max 1.78 on this four-level scale).
+  // The earlier `levels.length - 1` default assumed the scale's top is reached
+  // routinely; it is reached only by language that describes catastrophic
+  // action outright, so the gate never fired on a real command.
+  denyAt: 2,
+  askAt: 1,
   // Equal to denyAt: the band is empty until a deployment widens it.
-  reviseAt: DEFAULT_GUARD_LEVELS.length - 1,
+  reviseAt: 2,
   escalateOnLowConfidence: true,
   onError: 'allow',
 }
@@ -563,12 +568,15 @@ function resolveGuard(overrides: GuardConfig | undefined): ResolvedGuardConfig {
     }
   }
   const lastIndex = levels.length - 1
-  const denyAt = requireLevelIndex(overrides?.denyAt ?? lastIndex, 'guard.denyAt', lastIndex)
-  const askAt = requireLevelIndex(
-    overrides?.askAt ?? Math.max(0, denyAt - 1),
-    'guard.askAt',
-    lastIndex,
-  )
+  // Defaults come from DEFAULT_GUARD and clamp to this list, so a deployment
+  // with fewer levels resolves instead of failing on a threshold it never named.
+  // An explicit value is validated, never clamped.
+  const denyAt = overrides?.denyAt === undefined
+    ? Math.min(DEFAULT_GUARD.denyAt, lastIndex)
+    : requireLevelIndex(overrides.denyAt, 'guard.denyAt', lastIndex)
+  const askAt = overrides?.askAt === undefined
+    ? Math.min(DEFAULT_GUARD.askAt, denyAt)
+    : requireLevelIndex(overrides.askAt, 'guard.askAt', lastIndex)
   const reviseAt = requireLevelIndex(overrides?.reviseAt ?? denyAt, 'guard.reviseAt', lastIndex)
   if (reviseAt < askAt) {
     throw new JevConfigError(

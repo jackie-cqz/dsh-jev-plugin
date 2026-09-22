@@ -167,3 +167,30 @@ describe('resolveConfig validation', () => {
     expect(() => resolveConfig({ apiKeyEnv: '' }, {})).toThrow(/apiKeyEnv/)
   })
 })
+
+describe('risk-gate defaults', () => {
+  it('calibrates the default bands against the measured score distribution', () => {
+    // 100 real shell commands scored a median of 0.54 and never exceeded 1.78 on
+    // this four-level scale, so bands anchored to the top of the scale never
+    // fired. These pin the calibrated values: changing them is a decision.
+    const { guard } = resolveConfig({}, {})
+
+    expect(guard.denyAt).toBe(2)
+    expect(guard.askAt).toBe(1)
+    // Equal to denyAt, so the revise band stays empty until a deployment widens it.
+    expect(guard.reviseAt).toBe(2)
+  })
+
+  it('clamps a default threshold to a shorter level list instead of failing', () => {
+    const { guard } = resolveConfig({ guard: { levels: ['low', 'high'] } }, {})
+
+    expect(guard.denyAt).toBe(1)
+    expect(guard.askAt).toBe(1)
+  })
+
+  it('validates an explicit threshold rather than clamping it', () => {
+    expect(() => resolveConfig({ guard: { levels: ['low', 'high'], denyAt: 2 } }, {}))
+      .toThrow(/guard\.denyAt/)
+    expect(() => resolveConfig({ guard: { askAt: 9 } }, {})).toThrow(/guard\.askAt/)
+  })
+})
