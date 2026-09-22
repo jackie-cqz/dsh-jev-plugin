@@ -93,7 +93,17 @@ dsh plugin --profile jev-dev add dsh-jev-plugin
 | `guard.denyAt` | 最高级下标 | 风险分达到此级即拒绝 |
 | `guard.askAt` | 次高级下标 | 风险分达到此级需人工确认 |
 | `guard.escalateOnLowConfidence` | `true` | 置信度低于 `confidence.escalateBelow` 时转为人工确认 |
+| `guard.reviseAt` | 最高级下标 | 风险分达到此级改为**拒绝并附改写指引**；默认等于 `denyAt`，即**默认不启用**，要生效必须显式放宽 |
 | `guard.onError` | `"allow"` | 闸门自身失败时的行为：`allow` 为 fail-open，`deny` 为 fail-closed |
+| `rules.enabled` | `false` | 开启**离线硬拒止层**：同步、不联网、不需要 key、不可被审批越过 |
+| `rules.tools` | `[]` | 规则检查的工具名；空列表检查全部 |
+| `rules.deny` | `[]` | 追加到内置规则集的拒绝模式（大小写不敏感正则，非法正则在加载时报错） |
+| `review.enabled` | `false` | 开启 `tools/post-execute` 结果复核（会改写已完成的工具结果，风险较高） |
+| `review.blockAt` / `review.onError` | `0.8` / `"accept"` | 判定为需纠正的概率门槛；失败时默认放行 |
+| `routing.enabled` | `false` | 开启模型路由（`agent/request`），按请求复杂度改派 `routing.models` 里的档位 |
+| `context.enabled` | `false` | 开启上下文裁剪（`agent/pre-step`） |
+| `context.maxDrops` / `context.shadow` | `0` / `false` | 单次最多丢几条（0 不限）；`shadow` 只报告不改动，**任何会删内容的钩子都应先跑它** |
+| `quotaCooldownMs` | `900000` | 收到 `402` 后停止发请求的时长；**独立于 `policy.enabled`**，`0` 表示不冷却 |
 | `enableDecide` / `enableEvaluate` | `true` | 是否注册对应的工具 |
 | `telemetry.log` | `false` | 每次调用输出一条脱敏结构化记录 |
 | `telemetry.sampleRate` | `1` | 记录抽样比例（0–1） |
@@ -223,9 +233,38 @@ score: 2.99/3 = 紧急 (confidence=0.99)
 
 **隐私**：开启闸门意味着**工具名与参数**会被发给 TypeSafe API 并记入 DSH 会话日志。`guard.tools` 就是用来把范围收窄到你真正想拦的那几个工具的。
 
+## 离线硬拒止层（可选）
+
+与语义闸门**互相独立**，建议一起开。它是一组**同步、纯文本匹配**的规则，挂 `ctx.tools.guard()`，**不联网、不需要 API key、不可被审批或令牌越过**：
+
+```yaml
+- id: tool-jev
+  config:
+    rules:
+      enabled: true
+      tools: ['bash', 'run_shell']
+      deny: ['\bterraform\s+destroy\b']   # 追加到内置规则集
+```
+
+它**注册在语义闸门之前**，所以已被离线规则拒绝的调用**不会先花一次 Jev 往返**（实测 3 次工具调用只产生 1 次 Jev 调用——只有放行的那条走到语义层）。拒绝的约束力不变：只有 `ask` 会走审批。
+
+内置覆盖递归删根、`dd of=/dev/`、`mkfs`、`git push --force`（不含 `--force-with-lease`）、`DROP`/`TRUNCATE`、`chmod -R 777 /`、fork bomb、关机重启。**实测**（禁用网络且不给 key，也就是语义层完全不可用时）：
+
+```
+DENY   rm -rf /                    allow  rm -rf ./build
+DENY   git push --force            allow  git push --force-with-lease
+DENY   shutdown -h now             allow  echo reboot
+DENY   dd if=/dev/zero of=/dev/sda
+DENY   DROP TABLE users
+```
+
+**它是事故安全网，不是安全边界**：只匹配已知文本形态，不做语义理解、不模拟文件系统、不防蓄意绕过（变量拼接、base64、脚本间接执行）。理由里**不会回显参数内容**（参数可能含密钥）。
+
 ## 可观测性
 
 `ctx.jev.stats()` 给出 `calls` / `failures` / `retries` / `tokens` / `lastLatencyMs` / `totalLatencyMs` / `models`，以及准入策略与缓存的计数；成功率与错误率由前两项现算。`ctx.jev.health()` 返回 `healthy` / `degraded` / `unknown`，样本少于 `telemetry.alertMinCalls` 时返回 `unknown` 而不是「健康」——两次调用里错一次是 0.5 的错误率，同时也是零证据。
+
+在会话里执行 **`/jev-status`** 会打印一份诊断：各能力开关、阈值、模型与判定端点、key 来源、调用与重试计数、健康状态，以及在 **Notes** 段列出「什么都没发生」的原因——未启用拦截、闸门开着但一次都没检查、检查了但一次都没到传输层、记录被采样丢弃、遥测出口报错、缺 key。失败默认放行，这些原因在别处都不会报错，所以诊断面是唯一能看见它们的地方。
 
 开启 `telemetry.log` 后，每次调用（**含缓存命中**）会产出一条 `channel: 'ops'` 的记录，字段是**白名单重建**的：只含 outcome、model、耗时、token、重试次数、缓存标志与机器可读错误码。`state`、参数、工具结果与 API key **在接口上就没有对应字段**，所以脱敏是结构性的而不是约定。记录交给 `ctx.sessionTelemetry`，由 DSH 已挂载的遥测后端（例如 `@deepseek-ai/dsh-session-telemetry-otel`）导出——**本插件不依赖 OpenTelemetry**。没有挂后端的 profile 会退化成「只计数、不外发」，不会因此加载失败。
 
