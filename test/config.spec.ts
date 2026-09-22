@@ -175,10 +175,10 @@ describe('risk-gate defaults', () => {
     // fired. These pin the calibrated values: changing them is a decision.
     const { guard } = resolveConfig({}, {})
 
-    expect(guard.denyAt).toBe(2)
     expect(guard.askAt).toBe(1)
+    expect(guard.denyAt).toBe(3)
     // Equal to denyAt, so the revise band stays empty until a deployment widens it.
-    expect(guard.reviseAt).toBe(2)
+    expect(guard.reviseAt).toBe(3)
   })
 
   it('clamps a default threshold to a shorter level list instead of failing', () => {

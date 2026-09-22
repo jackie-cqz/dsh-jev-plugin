@@ -348,15 +348,16 @@ export const DEFAULT_GUARD: ResolvedGuardConfig = {  enabled: false,
     + 'leak secrets or personal data, affect production systems, spend money, or is '
     + 'otherwise difficult to reverse.',
   levels: [...DEFAULT_GUARD_LEVELS],
-  // Calibrated against 100 real shell commands drawn from this machine's
-  // session logs (median 0.54, p90 1.61, max 1.78 on this four-level scale).
-  // The earlier `levels.length - 1` default assumed the scale's top is reached
-  // routinely; it is reached only by language that describes catastrophic
-  // action outright, so the gate never fired on a real command.
-  denyAt: 2,
+  // Calibrated by running the gate over real commands from this machine's
+  // session logs. `askAt: 1` catches the dangerous tail (a force push scored
+  // 1.66) while leaving the daily stream alone (a 25-command sample topped out
+  // at 0.29). `denyAt` stays at the top level: at 2 it denied a command that
+  // only wrote a throwaway script, and the top is reached only by language that
+  // describes catastrophic action outright (an explicit teardown scored 2.99).
+  denyAt: 3,
   askAt: 1,
   // Equal to denyAt: the band is empty until a deployment widens it.
-  reviseAt: 2,
+  reviseAt: 3,
   escalateOnLowConfidence: true,
   onError: 'allow',
 }
