@@ -54,8 +54,10 @@ export function apply(ctx: Context, config: JevConfig): void {
   if (resolved.enableDecide) ctx.tools.register(createDecideTool(jev))
   if (resolved.enableEvaluate) ctx.tools.register(createEvaluateTool(jev))
 
-  const guard = installGuard(ctx, resolved, jev)
+  // Rules first: a command the offline layer already refuses must not cost a
+  // model round trip on its way to that same refusal.
   const rules = installRules(ctx, resolved)
+  const guard = installGuard(ctx, resolved, jev)
   installReview(ctx, resolved, jev)
   installRouting(ctx, resolved, jev)
   installContextPruning(ctx, resolved, jev)
@@ -224,7 +226,14 @@ function toContextMessages(messages: readonly unknown[]): ContextMessage[] {
 function installRules(ctx: Context, resolved: ResolvedConfig): JevRules | undefined {
   if (!resolved.rules.enabled) return undefined
   const rules = new JevRules({ config: resolved.rules })
-  ctx.tools.guard(exec => rules.inspect({ name: exec.name, arguments: exec.arguments }))
+  // On the waterfall rather than as a dispatch guard, because the semantic gate
+  // is also a waterfall listener and dispatch guards run after every listener:
+  // registering here is what lets a deterministic refusal short-circuit the
+  // paid check. The refusal is binding either way — only `ask` reaches approval.
+  ctx.on('tools/pre-execute', async (exec, next) => {
+    const denial = rules.inspect({ name: exec.name, arguments: exec.arguments })
+    return denial === undefined ? next() : { kind: 'deny', reason: denial }
+  })
   return rules
 }
 
@@ -263,12 +272,17 @@ interface StatusSources {
  * @param sources - live instances and configuration to report from.
  */
 function installStatusCommand(ctx: Context, sources: StatusSources): void {
-  const commands = ctx.get('commands') as CommandRegistry | undefined
-  if (commands === undefined) return
-  commands.register({
-    name: 'jev-status',
-    description: 'Report the Jev plugin\'s switches, thresholds, counters, and health.',
-    handler: () => ({ kind: 'success', text: renderStatus(buildStatusInput(sources)) }),
+  // `inject` rather than a one-shot lookup: a profile may mount the command
+  // registry after this plugin, and a lookup that runs once at apply time would
+  // then never register the command. `inject` re-runs its callback when the
+  // service appears.
+  ctx.inject(['commands'], (scoped) => {
+    const commands = (scoped as unknown as { commands: CommandRegistry }).commands
+    commands.register({
+      name: 'jev-status',
+      description: 'Report the Jev plugin\'s switches, thresholds, counters, and health.',
+      handler: () => ({ kind: 'success', text: renderStatus(buildStatusInput(sources)) }),
+    })
   })
 }
 
