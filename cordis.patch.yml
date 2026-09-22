@@ -1,0 +1,11 @@
+- insert:
+    - id: tool-jev
+      name: dsh-jev-plugin
+      config:
+        apiKeyEnv: TYPESAFE_API_KEY
+        model: jev-latest
+        timeoutMs: 10000
+        retry:
+          maxAttempts: 3
+          baseDelayMs: 500
+          maxDelayMs: 5000

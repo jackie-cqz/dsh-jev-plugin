@@ -1,0 +1,89 @@
+{
+  "name": "dsh-jev-plugin",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness tools for TypeSafe Jev (System One) decisions.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "typesafe",
+    "typesafe-ai",
+    "jev",
+    "system-one",
+    "guardrails",
+    "decision"
+  ],
+  "homepage": "https://github.com/jackie-cqz/dsh-jev-plugin#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jackie-cqz/dsh-jev-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jackie-cqz/dsh-jev-plugin/issues"
+  },
+  "author": "jackie-cqz",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "node scripts/smoke.mjs",
+    "cases": "node scripts/jev-cases.mjs",
+    "check:pack": "node scripts/check-pack.mjs",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-util-values": "^0.1.6-alpha.2",
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-tools": "^0.1.6-alpha.2"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-agent": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-invariants": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-llm": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-ptc-runtime": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-sandbox": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-sandbox-policy": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-scope": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-session": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-system-prompt": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-tools": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-user-approval": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-util-values": "0.1.6-alpha.2",
+    "@deepseek-ai/schemastery": "3.18.2",
+    "@types/node": "^22.10.2",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}
