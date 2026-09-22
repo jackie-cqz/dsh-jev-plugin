@@ -268,6 +268,15 @@ DENY   DROP TABLE users
 
 开启 `telemetry.log` 后，每次调用（**含缓存命中**）会产出一条 `channel: 'ops'` 的记录，字段是**白名单重建**的：只含 outcome、model、耗时、token、重试次数、缓存标志与机器可读错误码。`state`、参数、工具结果与 API key **在接口上就没有对应字段**，所以脱敏是结构性的而不是约定。记录交给 `ctx.sessionTelemetry`，由 DSH 已挂载的遥测后端（例如 `@deepseek-ai/dsh-session-telemetry-otel`）导出——**本插件不依赖 OpenTelemetry**。没有挂后端的 profile 会退化成「只计数、不外发」，不会因此加载失败。
 
+## 让它被用上：`jev-decisions` skill
+
+工具描述说的是「这个工具能做什么」，而模型触发靠的是「**什么情况下该想起来用它**」。skill 的 `description` 会渲染进注入的 skill 目录、每一步都在模型上下文里，是比工具 schema 强得多的触发面。本包附一份：
+
+```sh
+cp -r node_modules/dsh-jev-plugin/skills/jev-decisions ~/.agents/skills/
+```
+
+
 ## 限制与安全
 
 - **把 `state` 交给 TypeSafe**：`state` 会发送到 TypeSafe API，也会进入 DSH 会话日志。不要放不必要的机密。

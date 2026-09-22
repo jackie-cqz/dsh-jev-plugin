@@ -38,6 +38,7 @@
   "files": [
     "dist",
     "lib",
+    "skills",
     "cordis.patch.yml",
     "README.md",
     "LICENSE"

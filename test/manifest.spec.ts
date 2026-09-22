@@ -49,7 +49,7 @@ describe('package manifest', () => {
   it('ships the host bundle, the client bundle, and the two licence-adjacent files', () => {
     // `lib` holds the Web client half, which DSH loads as a module-loader
     // factory rather than through `main`; both entry points must ship.
-    expect(manifest.files).toEqual(['dist', 'lib', 'cordis.patch.yml', 'README.md', 'LICENSE'])
+    expect(manifest.files).toEqual(['dist', 'lib', 'skills', 'cordis.patch.yml', 'README.md', 'LICENSE'])
   })
 
   it('exposes the client half under its own export and manifest field', () => {

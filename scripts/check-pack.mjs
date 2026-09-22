@@ -30,6 +30,7 @@ const EXPECTED_FILES = [
   'dist/index.d.ts',
   'dist/index.js',
   'lib/client.js',
+  'skills/jev-decisions/SKILL.md',
   'package.json',
 ]
 
@@ -168,7 +169,7 @@ check(
 
 // --- build outputs are non-empty on disk and in the tarball ------------------
 
-const dist = ['dist/index.js', 'dist/index.d.ts', 'lib/client.js']
+const dist = ['dist/index.js', 'dist/index.d.ts', 'lib/client.js', 'skills/jev-decisions/SKILL.md']
 const emptyOnDisk = dist.filter(path => !existsSync(join(PACKAGE_ROOT, path)) || statSync(join(PACKAGE_ROOT, path)).size === 0)
 const emptyInPack = report.files.filter(file => dist.includes(file.path) && file.size === 0).map(file => file.path)
 check(
