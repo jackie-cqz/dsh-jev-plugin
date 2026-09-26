@@ -9,3 +9,15 @@ export function runNpm(args, options = {}) {
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], ...options,
   })
 }
+
+/** Parse npm 10/11 array reports and npm 12 reports keyed by package name. */
+export function parsePackReport(stdout) {
+  for (const match of stdout.matchAll(/^[\[{]/gm)) {
+    let parsed
+    try { parsed = JSON.parse(stdout.slice(match.index)) } catch { continue }
+    const reports = Array.isArray(parsed) ? parsed : Object.values(parsed)
+    if (reports.length === 1 && reports[0] && typeof reports[0].filename === 'string'
+      && Array.isArray(reports[0].files)) return reports[0]
+  }
+  throw new Error('npm pack did not return exactly one valid package report')
+}

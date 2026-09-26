@@ -66,3 +66,8 @@ jobs:
 
       - name: Install and exercise published package (mock API)
         run: npm run check:install
+
+      - name: Verify previous DSH runtime compatibility
+        run: npm run check:install
+        env:
+          DSH_TEST_VERSION: 0.1.6-alpha.2

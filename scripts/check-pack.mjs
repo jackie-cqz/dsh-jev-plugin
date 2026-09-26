@@ -10,12 +10,12 @@
  * breaks the declared `.js` / `.d.ts` entry points.
  *
  * Usage:
- *   node scripts/check-pack.mjs
+ *   npm run check:pack
  *
  * Exits 0 when every check passes, 1 otherwise. Reads no third-party modules.
  */
 
-import { runNpm } from './npm.mjs'
+import { runNpm, parsePackReport } from './npm.mjs'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -82,33 +82,9 @@ function runPackDryRun() {
   return runNpm(args, { cwd: PACKAGE_ROOT })
 }
 
-/**
- * Extract the JSON payload from stdout that lifecycle scripts also write to.
- * @param {string} stdout - combined `npm pack --dry-run --json` output.
- * @returns the parsed array of pack reports.
- */
-function extractPackReport(stdout) {
-  const candidates = [0]
-  for (let index = stdout.indexOf('\n['); index !== -1; index = stdout.indexOf('\n[', index + 1)) {
-    candidates.push(index + 1)
-  }
-  for (const start of candidates) {
-    try {
-      const parsed = JSON.parse(stdout.slice(start))
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
-    } catch {
-      // Not the payload start; try the next candidate.
-    }
-  }
-  throw new Error(
-    `no JSON array found in ${stdout.length} bytes of npm output `
-    + `(first line: ${JSON.stringify(stdout.split('\n')[0]?.slice(0, 80))})`,
-  )
-}
-
 let report
 try {
-  report = extractPackReport(runPackDryRun())[0]
+  report = parsePackReport(runPackDryRun())
 } catch (error) {
   // A lifecycle script writing to stdout, or npm itself failing, must surface as
   // its own failure rather than bubbling up as an unhandled exception.

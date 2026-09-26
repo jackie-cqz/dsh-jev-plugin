@@ -15,7 +15,7 @@ Jev 不是聊天模型：它不生成文本，只返回结构化判断。本插�
 ## 状态
 
 - 版本：`0.1.0`（发布准备中）
-- 目标 DSH 版本：`0.1.6-alpha.2`（声明范围 `>=0.1.6-alpha.2 <0.2.0`，其他版本尚未逐一验证）
+- 目标 DSH 版本：`0.1.7-rc.2`；保留 `0.1.6-alpha.2` 安装回归验证（声明范围 `>=0.1.6-alpha.2 <0.2.0`，其他版本尚未逐一验证）
 - 许可证：MIT
 - 独立包，通过 `dsh.bundle` 机制安装；不修改 DSH 主仓库
 
@@ -23,16 +23,19 @@ Jev 不是聊天模型：它不生成文本，只返回结构化判断。本插�
 
 | 项目 | 范围 |
 |---|---|
-| 目标 DeepSeek Harness | `0.1.6-alpha.2` |
+| 目标 DeepSeek Harness | `0.1.7-rc.2`（另验证 `0.1.6-alpha.2`） |
 | `@deepseek-ai/cordis`（peerDependency） | `^4.0.2` |
-| `@deepseek-ai/dsh-tools`（peerDependency） | `^0.1.6-alpha.2` |
-| Node（`engines`） | `>=22` |
+| `@deepseek-ai/dsh-tools`（peerDependency） | `^0.1.6-alpha.2` 或 `^0.1.7-rc.2` |
+| Node（插件 `engines`） | `>=22` |
+| Node（DSH 0.1.7 宿主） | `^22.19.0` 或 `>=24.0.0` |
 
 构建与测试依赖由 `package-lock.json` 锁定。CI 配置覆盖 Node 22 / 24；本地发布检查已在 Node 24 上通过。
 
+`0.1.7-rc.2` 兼容验证：类型检查及 782 个插件测试通过；两版运行时的 tarball 安装检查通过。本地上游源码也已成功启动 Web profile 并提供 Jev 客户端 bundle。本轮未重新验证真实 TypeSafe 调用和浏览器中的结果卡片渲染。
+
 ### 为什么一批 `@deepseek-ai/*` 出现在 devDependencies
 
-发布的 `@deepseek-ai/dsh-tools@0.1.6-alpha.2` 把 `dsh-agent`、`dsh-invariants`、`dsh-llm`、`dsh-ptc-runtime`、`dsh-sandbox`、`dsh-sandbox-policy`、`dsh-scope`、`dsh-session`、`dsh-system-prompt`、`dsh-user-approval` 声明为 peerDependencies（另有 `cordis`，本包已单独声明）。`npm install --legacy-peer-deps` 不会自动安装它们，而缺少任何一个都会让 `import '@deepseek-ai/dsh-tools'` 直接失败，因此本包把这 10 个包全部列入 devDependencies。运行期它们由目标 profile 提供，所以不进入 `dependencies`。
+发布的 `@deepseek-ai/dsh-tools@0.1.7-rc.2` 把 `dsh-agent`、`dsh-invariants`、`dsh-llm`、`dsh-ptc-runtime`、`dsh-sandbox`、`dsh-sandbox-policy`、`dsh-scope`、`dsh-session`、`dsh-system-prompt`、`dsh-user-approval` 声明为 peerDependencies（另有 `cordis`，本包已单独声明）。`npm install --legacy-peer-deps` 不会自动安装它们，而缺少任何一个都会让 `import '@deepseek-ai/dsh-tools'` 直接失败，因此本包把这 10 个包全部列入 devDependencies。运行期它们由目标 profile 提供，所以不进入 `dependencies`。
 
 ### 已知环境限制
 
@@ -312,9 +315,11 @@ npm run check:release
 `check:release` 依次运行类型检查、全部测试、服务端与客户端构建、严格打包检查和 tarball 安装 smoke。`npm publish` 的 `prepublishOnly` 也执行同一套检查；检查失败会阻止发布。
 
 - `npm run check:pack`：要求先构建；核对 9 个发布文件、入口与 bundle patch、非空产物、双语 README 必需章节和语言切换链接，以及常见私钥/token 特征。特征扫描不保证识别所有格式的秘密。
-- `npm run check:install`：要求先构建；实际打包并安装到 `.release-smoke-*` 临时消费者目录，使用固定的 DSH `0.1.6-alpha.2` 运行时依赖验证工具调用、注销、客户端工厂和 slot 注册。安装禁用生命周期脚本，验证 npm 包自带构建产物。目录保留供排查，并被 Git 与发布文件白名单排除。
+- `npm run check:install`：要求先构建；实际打包并安装到 `.release-smoke-*` 临时消费者目录，使用固定的 DSH `0.1.7-rc.2` 运行时依赖验证工具调用、注销、客户端工厂和 slot 注册。安装禁用生命周期脚本，验证 npm 包自带构建产物。目录保留供排查，并被 Git 与发布文件白名单排除。
 - 安装检查需要访问 npm registry，不调用真实 TypeSafe API，也不需要 API key；不代替 DSH CLI profile 安装与真实浏览器验收。
 - CI 在 Ubuntu / Windows、Node 22 / 24 上运行以上检查。真实 API 和浏览器验收需手动执行：安装到独立 DSH profile，启动 Web，分别调用 `jev_decide` 的 noul/choice/score 和 `jev_evaluate` 多问题，并检查结果卡片。
+
+CI 还设置 `DSH_TEST_VERSION=0.1.6-alpha.2` 运行安装检查，覆盖旧版运行时。PowerShell 可先设置 `$env:DSH_TEST_VERSION` 再执行 `npm run check:install`。打包检查兼容 npm 10/11 的数组报告及 npm 12 的按包名索引报告。
 
 ### 本地验证
 
