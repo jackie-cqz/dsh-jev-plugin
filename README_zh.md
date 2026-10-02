@@ -60,7 +60,19 @@ dsh --profile jev-dev
 dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#v0.1.0
 ```
 
-从 Git 源码安装时，pnpm 会先执行本包的 `prepare` 脚本（`npm run build`）再加载；若 pnpm 提示构建脚本被拦截，按它打印的键名把该包加入 profile 的 `pnpm-workspace.yaml` 下的 `allowBuilds` 后重试。
+Git 源码安装会执行本包的 `prepare` 脚本（`npm run build`）。若被拦截，按照 **pnpm 报错中的配置键**修改该 profile 的 `pnpm-workspace.yaml`，再重试安装。pnpm 10 使用下面的配置，仅放行本插件：
+
+```yaml
+onlyBuiltDependencies:
+  - dsh-jev-plugin
+```
+
+如果当前 pnpm 提示使用 `allowBuilds`，改用以下映射（不要同时配置这两项）：
+
+```yaml
+allowBuilds:
+  dsh-jev-plugin: true
+```
 
 也可以使用 [v0.1.0 发布页](https://github.com/jackie-cqz/dsh-jev-plugin/releases/tag/v0.1.0) 的预构建安装包。初始化 Web profile 后直接执行：
 

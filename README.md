@@ -60,7 +60,19 @@ From GitHub (initialize the Web profile as above first; the release tag fixes th
 dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#v0.1.0
 ```
 
-Git installs use the package's `prepare` script (`npm run build`) to build the artifacts. If pnpm blocks the build script, follow its message to add the package to `allowBuilds` in the profile's `pnpm-workspace.yaml`, then retry.
+Git installs run the package's `prepare` script (`npm run build`). If pnpm blocks it, edit the profile's `pnpm-workspace.yaml` using the setting named by **pnpm's error**, then repeat the install command. With pnpm 10, add only this package:
+
+```yaml
+onlyBuiltDependencies:
+  - dsh-jev-plugin
+```
+
+If your pnpm version requests `allowBuilds`, use the equivalent mapping instead (do not combine the two settings):
+
+```yaml
+allowBuilds:
+  dsh-jev-plugin: true
+```
 
 The [v0.1.0 release](https://github.com/jackie-cqz/dsh-jev-plugin/releases/tag/v0.1.0) also provides a prebuilt package. After initializing a Web profile, install it directly:
 
