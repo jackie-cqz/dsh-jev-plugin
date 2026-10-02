@@ -19,7 +19,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { existsSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -35,7 +35,7 @@ if (!process.env[API_KEY_ENV]) {
   process.exit(2)
 }
 
-const Jev = await import(ENTRY)
+const Jev = await import(pathToFileURL(ENTRY).href)
 const kindFilter = process.argv[2]
 
 /**

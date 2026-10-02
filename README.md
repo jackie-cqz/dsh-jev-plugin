@@ -14,8 +14,8 @@ Jev returns structured judgments rather than conversational text. This plugin ex
 
 ## Status
 
-- Version: `0.1.0` (preparing for release).
-- Target DSH: `0.1.7-rc.2`; `0.1.6-alpha.2` remains covered by installation smoke tests. Declared range: `>=0.1.6-alpha.2 <0.2.0`; other versions have not been individually verified.
+- Version: `0.1.0`.
+- Target DSH: `0.2.0-rc.2`; `0.1.7-rc.2` and `0.1.6-alpha.2` remain covered by installation smoke tests. Declared range: `>=0.1.6-alpha.2 <0.2.0 || >=0.2.0-rc.2 <0.3.0`; other versions have not been individually verified.
 - License: MIT.
 - Standalone package installed through `dsh.bundle`; no changes to the DSH repository are required.
 
@@ -23,19 +23,19 @@ Jev returns structured judgments rather than conversational text. This plugin ex
 
 | Component | Version or range |
 |---|---|
-| Target DeepSeek Harness | `0.1.7-rc.2` (also tested: `0.1.6-alpha.2`) |
+| Target DeepSeek Harness | `0.2.0-rc.2` (also tested: `0.1.7-rc.2`, `0.1.6-alpha.2`) |
 | `@deepseek-ai/cordis` (peer dependency) | `^4.0.2` |
-| `@deepseek-ai/dsh-tools` (peer dependency) | `^0.1.6-alpha.2` or `^0.1.7-rc.2` |
+| `@deepseek-ai/dsh-tools` (peer dependency) | `^0.1.6-alpha.2`, `^0.1.7-rc.2` or `^0.2.0-rc.2` |
 | Node (plugin) | `>=22` |
-| Node (DSH 0.1.7 host) | `^22.19.0` or `>=24.0.0` |
+| Node (DSH host) | `^22.19.0` or `>=24.0.0` |
 
 Build and test dependencies are locked in `package-lock.json`. CI is configured for Node 22 and 24; local release checks have passed on Node 24.
 
-Compatibility evidence for `0.1.7-rc.2`: typechecking and 782 plugin tests pass; tarball installation checks pass on both supported versions. A local upstream checkout also starts the Web profile and serves the Jev client bundle. Real TypeSafe calls and browser-rendered result cards were not revalidated in this compatibility pass.
+Compatibility checks: typechecking, 782 plugin tests and two packaging-parser tests pass on the target runtime. Tarball installation checks cover all three listed DSH versions. Live TypeSafe smoke and scenario checks pass on Windows / Node 24. Chromium acceptance verifies four successful tool calls, nine result bars and replay after reload, using a scripted LLM adapter with real Jev requests. Git-source acceptance is recorded in the release notes.
 
 ### Development dependencies
 
-`@deepseek-ai/dsh-tools@0.1.7-rc.2` declares these peers in addition to Cordis: `dsh-agent`, `dsh-invariants`, `dsh-llm`, `dsh-ptc-runtime`, `dsh-sandbox`, `dsh-sandbox-policy`, `dsh-scope`, `dsh-session`, `dsh-system-prompt`, and `dsh-user-approval` (all under `@deepseek-ai/`). Because `--legacy-peer-deps` does not install peers automatically, they are explicit development dependencies here. The target profile supplies them at runtime.
+`@deepseek-ai/dsh-tools@0.2.0-rc.2` declares these peers in addition to Cordis: `dsh-agent`, `dsh-invariants`, `dsh-llm`, `dsh-ptc-runtime`, `dsh-sandbox`, `dsh-sandbox-policy`, `dsh-scope`, `dsh-session`, `dsh-system-prompt`, and `dsh-user-approval` (all under `@deepseek-ai/`). Because `--legacy-peer-deps` does not install peers automatically, they are explicit development dependencies here. The target profile supplies them at runtime.
 
 ### TLS troubleshooting
 
@@ -54,13 +54,33 @@ dsh --profile jev-dev
 
 The first command initializes a new Web profile; run it only once for an unused profile name. Adding a plugin to a new name without selecting the Web template creates a base-only profile. If your profile already exists, omit initialization.
 
-From GitHub (replace `<commit-sha>` with the desired revision; initialize the Web profile as above first):
+From GitHub (initialize the Web profile as above first; the release tag fixes the installed revision):
 
 ```sh
-dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#<commit-sha>
+dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#v0.1.0
 ```
 
-Git installs use the package's `prepare` script (`npm run build`) to build the artifacts. If pnpm blocks the build script, follow its message to add the package to `allowBuilds` in the profile's `pnpm-workspace.yaml`, then retry.
+Git installs run the package's `prepare` script (`npm run build`). If pnpm blocks it, edit the profile's `pnpm-workspace.yaml` using the setting named by **pnpm's error**, then repeat the install command. With pnpm 10, add only this package:
+
+```yaml
+onlyBuiltDependencies:
+  - dsh-jev-plugin
+```
+
+If your pnpm version requests `allowBuilds`, use the equivalent mapping instead (do not combine the two settings):
+
+```yaml
+allowBuilds:
+  dsh-jev-plugin: true
+```
+
+The [v0.1.0 release](https://github.com/jackie-cqz/dsh-jev-plugin/releases/tag/v0.1.0) also provides a prebuilt package. After initializing a Web profile, install it directly:
+
+```sh
+dsh plugin --profile jev-dev add https://github.com/jackie-cqz/dsh-jev-plugin/releases/download/v0.1.0/dsh-jev-plugin-0.1.0.tgz
+```
+
+The archive includes the server and Web client builds, so no plugin compilation is needed. Release assets include SHA256SUMS and [CHANGELOG.md](./CHANGELOG.md).
 
 ## Configuration
 
@@ -300,12 +320,12 @@ npm run check:release
 
 This runs typechecking, tests, server and client builds, strict packaging checks, and a tarball installation smoke test. The `prepublishOnly` lifecycle runs the same gate before publication.
 
-- `npm run check:pack` requires a build and checks the nine packaged files, entry points, bundle patch, non-empty artifacts, both READMEs and their language links, and common private-key/token patterns. Pattern scanning cannot detect every secret format.
-- `npm run check:install` builds a real tarball from existing artifacts and installs it into `.release-smoke-*` with lifecycle scripts disabled. Using the target DSH `0.1.7-rc.2` runtime and a mock API, it checks calls, disposal, the client factory, and slot registration. Fixtures remain available for inspection and are excluded from Git and publication.
+- `npm run check:pack` requires a build and checks the ten packaged files, entry points, bundle patch, non-empty artifacts, both READMEs and their language links, and common private-key/token patterns. Pattern scanning cannot detect every secret format.
+- `npm run check:install` builds a real tarball from existing artifacts and installs it into `.release-smoke-*` with lifecycle scripts disabled. Using the target DSH `0.2.0-rc.2` runtime and a mock API, it checks calls, disposal, the client factory, and slot registration. Fixtures remain available for inspection and are excluded from Git and publication.
 - Installation checks need registry access but no TypeSafe key. They do not replace DSH CLI profile or browser acceptance tests.
 - CI is configured for Ubuntu/Windows and Node 22/24. For manual acceptance, install into a separate DSH profile, start the Web UI, call all three `jev_decide` primitives and multi-question `jev_evaluate`, and inspect result cards.
 
-The CI installation gate also runs with `DSH_TEST_VERSION=0.1.6-alpha.2` to check the previous runtime. In PowerShell, set `$env:DSH_TEST_VERSION` before `npm run check:install`. Build tooling supports npm 10/11 array reports and npm 12 keyed pack reports.
+The CI installation gate also runs with `DSH_TEST_VERSION=0.1.6-alpha.2` and `DSH_TEST_VERSION=0.1.7-rc.2` to check both previous runtimes. In PowerShell, set `$env:DSH_TEST_VERSION` before `npm run check:install`. Build tooling supports npm 10/11 array reports and npm 12 keyed pack reports.
 
 ### Local validation
 
@@ -326,7 +346,7 @@ TYPESAFE_API_KEY=... npm run cases -- score
 
 In PowerShell, set `$env:TYPESAFE_API_KEY` first, then run the npm commands without the inline assignment.
 
-The smoke script exercises the built plugin through the real DSH tool registry: three primitives, multi-question evaluation, object/array state, and missing or invalid keys. The cases script provides 17 scenario cases plus four known-weakness probes for counting, arithmetic, date comparison, and double negatives. It checks response structure and golden expectations where applicable; weakness probes are recorded without failing the run.
+The smoke script exercises the built plugin through the real DSH tool registry: three primitives, multi-question evaluation, object/array state, and missing or invalid keys. The cases script provides 13 scenario cases plus four known-weakness probes for counting, arithmetic, date comparison, and double negatives. It checks response structure and golden expectations where applicable; weakness probes are recorded without failing the run.
 
 If Node handshakes time out while `curl` succeeds, try a temporary TLS 1.2 cap:
 

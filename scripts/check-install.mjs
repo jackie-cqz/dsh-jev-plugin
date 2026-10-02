@@ -15,7 +15,7 @@ const dependencies = Object.fromEntries(Object.entries(manifest.devDependencies)
 // Exercise each supported prerelease explicitly: npm's latest tag and caret
 // ranges do not select a newer minor's prerelease automatically.
 const target = process.env.DSH_TEST_VERSION ?? manifest.devDependencies['@deepseek-ai/dsh-tools']
-if (!['0.1.6-alpha.2', '0.1.7-rc.2'].includes(target)) {
+if (!['0.1.6-alpha.2', '0.1.7-rc.2', '0.2.0-rc.2'].includes(target)) {
   throw new Error(`Unsupported DSH_TEST_VERSION: ${target}`)
 }
 for (const name of Object.keys(dependencies)) {

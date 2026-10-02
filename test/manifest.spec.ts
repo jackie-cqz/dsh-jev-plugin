@@ -38,7 +38,7 @@ describe('package manifest', () => {
   it('declares a DSH compatibility range beside the Node one', () => {
     // The declared range is advisory, so it is the only statement of which
     // harness releases this plugin was built against.
-    expect(manifest.engines?.dsh).toBe('>=0.1.6-alpha.2 <0.2.0')
+    expect(manifest.engines?.dsh).toBe('>=0.1.6-alpha.2 <0.2.0 || >=0.2.0-rc.2 <0.3.0')
     expect(manifest.engines?.node).toBe('>=22')
   })
 
@@ -49,7 +49,7 @@ describe('package manifest', () => {
   it('ships the host bundle, the client bundle, and the two licence-adjacent files', () => {
     // `lib` holds the Web client half, which DSH loads as a module-loader
     // factory rather than through `main`; both entry points must ship.
-    expect(manifest.files).toEqual(['dist', 'lib', 'skills', 'cordis.patch.yml', 'README.md', 'README_zh.md', 'LICENSE'])
+    expect(manifest.files).toEqual(['dist', 'lib', 'skills', 'cordis.patch.yml', 'README.md', 'README_zh.md', 'CHANGELOG.md', 'LICENSE'])
   })
 
   it('exposes the client half under its own export and manifest field', () => {

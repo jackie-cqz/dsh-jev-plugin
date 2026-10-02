@@ -14,8 +14,8 @@ Jev 不是聊天模型：它不生成文本，只返回结构化判断。本插�
 
 ## 状态
 
-- 版本：`0.1.0`（发布准备中）
-- 目标 DSH 版本：`0.1.7-rc.2`；保留 `0.1.6-alpha.2` 安装回归验证（声明范围 `>=0.1.6-alpha.2 <0.2.0`，其他版本尚未逐一验证）
+- 版本：`0.1.0`
+- 目标 DSH 版本：`0.2.0-rc.2`；保留 `0.1.7-rc.2` 和 `0.1.6-alpha.2` 安装回归验证（声明范围 `>=0.1.6-alpha.2 <0.2.0 || >=0.2.0-rc.2 <0.3.0`，其他版本尚未逐一验证）
 - 许可证：MIT
 - 独立包，通过 `dsh.bundle` 机制安装；不修改 DSH 主仓库
 
@@ -23,19 +23,19 @@ Jev 不是聊天模型：它不生成文本，只返回结构化判断。本插�
 
 | 项目 | 范围 |
 |---|---|
-| 目标 DeepSeek Harness | `0.1.7-rc.2`（另验证 `0.1.6-alpha.2`） |
+| 目标 DeepSeek Harness | `0.2.0-rc.2`（另验证 `0.1.7-rc.2`、`0.1.6-alpha.2`） |
 | `@deepseek-ai/cordis`（peerDependency） | `^4.0.2` |
-| `@deepseek-ai/dsh-tools`（peerDependency） | `^0.1.6-alpha.2` 或 `^0.1.7-rc.2` |
+| `@deepseek-ai/dsh-tools`（peerDependency） | `^0.1.6-alpha.2`、`^0.1.7-rc.2` 或 `^0.2.0-rc.2` |
 | Node（插件 `engines`） | `>=22` |
-| Node（DSH 0.1.7 宿主） | `^22.19.0` 或 `>=24.0.0` |
+| Node（DSH 宿主） | `^22.19.0` 或 `>=24.0.0` |
 
 构建与测试依赖由 `package-lock.json` 锁定。CI 配置覆盖 Node 22 / 24；本地发布检查已在 Node 24 上通过。
 
-`0.1.7-rc.2` 兼容验证：类型检查及 782 个插件测试通过；两版运行时的 tarball 安装检查通过。本地上游源码也已成功启动 Web profile 并提供 Jev 客户端 bundle。本轮未重新验证真实 TypeSafe 调用和浏览器中的结果卡片渲染。
+兼容检查：目标运行时的类型检查、782 个插件测试和 2 个打包报告解析测试通过；三版 DSH 的 tarball 安装检查均通过。Windows / Node 24 上的真实 TypeSafe smoke 和场景检查通过。Chromium 验收验证了四个成功工具调用、九个结果概率条以及刷新后重放，使用固定 LLM 测试适配器驱动真实 Jev 请求。Git 源码安装验收见发布记录。
 
 ### 为什么一批 `@deepseek-ai/*` 出现在 devDependencies
 
-发布的 `@deepseek-ai/dsh-tools@0.1.7-rc.2` 把 `dsh-agent`、`dsh-invariants`、`dsh-llm`、`dsh-ptc-runtime`、`dsh-sandbox`、`dsh-sandbox-policy`、`dsh-scope`、`dsh-session`、`dsh-system-prompt`、`dsh-user-approval` 声明为 peerDependencies（另有 `cordis`，本包已单独声明）。`npm install --legacy-peer-deps` 不会自动安装它们，而缺少任何一个都会让 `import '@deepseek-ai/dsh-tools'` 直接失败，因此本包把这 10 个包全部列入 devDependencies。运行期它们由目标 profile 提供，所以不进入 `dependencies`。
+发布的 `@deepseek-ai/dsh-tools@0.2.0-rc.2` 把 `dsh-agent`、`dsh-invariants`、`dsh-llm`、`dsh-ptc-runtime`、`dsh-sandbox`、`dsh-sandbox-policy`、`dsh-scope`、`dsh-session`、`dsh-system-prompt`、`dsh-user-approval` 声明为 peerDependencies（另有 `cordis`，本包已单独声明）。`npm install --legacy-peer-deps` 不会自动安装它们，而缺少任何一个都会让 `import '@deepseek-ai/dsh-tools'` 直接失败，因此本包把这 10 个包全部列入 devDependencies。运行期它们由目标 profile 提供，所以不进入 `dependencies`。
 
 ### 已知环境限制
 
@@ -54,13 +54,33 @@ dsh --profile jev-dev
 
 第一条命令用 Web 模板初始化新 profile，只对未使用的名称执行一次。直接给新名称添加插件只会创建基础 profile，不会启用 Web 应用。已有 Web profile 可跳过初始化。
 
-从 GitHub 安装（先按上面初始化 Web profile，再将 `<commit-sha>` 替换为目标提交）：
+从 GitHub 安装（先按上面初始化 Web profile；版本标签固定安装的代码版本）：
 
 ```sh
-dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#<commit-sha>
+dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#v0.1.0
 ```
 
-从 Git 源码安装时，pnpm 会先执行本包的 `prepare` 脚本（`npm run build`）再加载；若 pnpm 提示构建脚本被拦截，按它打印的键名把该包加入 profile 的 `pnpm-workspace.yaml` 下的 `allowBuilds` 后重试。
+Git 源码安装会执行本包的 `prepare` 脚本（`npm run build`）。若被拦截，按照 **pnpm 报错中的配置键**修改该 profile 的 `pnpm-workspace.yaml`，再重试安装。pnpm 10 使用下面的配置，仅放行本插件：
+
+```yaml
+onlyBuiltDependencies:
+  - dsh-jev-plugin
+```
+
+如果当前 pnpm 提示使用 `allowBuilds`，改用以下映射（不要同时配置这两项）：
+
+```yaml
+allowBuilds:
+  dsh-jev-plugin: true
+```
+
+也可以使用 [v0.1.0 发布页](https://github.com/jackie-cqz/dsh-jev-plugin/releases/tag/v0.1.0) 的预构建安装包。初始化 Web profile 后直接执行：
+
+```sh
+dsh plugin --profile jev-dev add https://github.com/jackie-cqz/dsh-jev-plugin/releases/download/v0.1.0/dsh-jev-plugin-0.1.0.tgz
+```
+
+安装包包含服务端与 Web 客户端构建产物，无需编译插件。发布附件提供 SHA256SUMS，变更记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 配置
 
@@ -314,12 +334,12 @@ npm run check:release
 
 `check:release` 依次运行类型检查、全部测试、服务端与客户端构建、严格打包检查和 tarball 安装 smoke。`npm publish` 的 `prepublishOnly` 也执行同一套检查；检查失败会阻止发布。
 
-- `npm run check:pack`：要求先构建；核对 9 个发布文件、入口与 bundle patch、非空产物、双语 README 必需章节和语言切换链接，以及常见私钥/token 特征。特征扫描不保证识别所有格式的秘密。
-- `npm run check:install`：要求先构建；实际打包并安装到 `.release-smoke-*` 临时消费者目录，使用固定的 DSH `0.1.7-rc.2` 运行时依赖验证工具调用、注销、客户端工厂和 slot 注册。安装禁用生命周期脚本，验证 npm 包自带构建产物。目录保留供排查，并被 Git 与发布文件白名单排除。
+- `npm run check:pack`：要求先构建；核对 10 个发布文件、入口与 bundle patch、非空产物、双语 README 必需章节和语言切换链接，以及常见私钥/token 特征。特征扫描不保证识别所有格式的秘密。
+- `npm run check:install`：要求先构建；实际打包并安装到 `.release-smoke-*` 临时消费者目录，使用固定的 DSH `0.2.0-rc.2` 运行时依赖验证工具调用、注销、客户端工厂和 slot 注册。安装禁用生命周期脚本，验证 npm 包自带构建产物。目录保留供排查，并被 Git 与发布文件白名单排除。
 - 安装检查需要访问 npm registry，不调用真实 TypeSafe API，也不需要 API key；不代替 DSH CLI profile 安装与真实浏览器验收。
 - CI 在 Ubuntu / Windows、Node 22 / 24 上运行以上检查。真实 API 和浏览器验收需手动执行：安装到独立 DSH profile，启动 Web，分别调用 `jev_decide` 的 noul/choice/score 和 `jev_evaluate` 多问题，并检查结果卡片。
 
-CI 还设置 `DSH_TEST_VERSION=0.1.6-alpha.2` 运行安装检查，覆盖旧版运行时。PowerShell 可先设置 `$env:DSH_TEST_VERSION` 再执行 `npm run check:install`。打包检查兼容 npm 10/11 的数组报告及 npm 12 的按包名索引报告。
+CI 还分别设置 `DSH_TEST_VERSION=0.1.6-alpha.2` 和 `DSH_TEST_VERSION=0.1.7-rc.2` 运行安装检查，覆盖两版旧运行时。PowerShell 可先设置 `$env:DSH_TEST_VERSION` 再执行 `npm run check:install`。打包检查兼容 npm 10/11 的数组报告及 npm 12 的按包名索引报告。
 
 ### 本地验证
 
@@ -338,7 +358,7 @@ TYPESAFE_API_KEY=... npm run smoke
 
 `scripts/smoke.mjs` 把构建产物装进真实的 DSH 工具注册表，对线上 TypeSafe API 依次验证 `jev_decide` 的三种 kind、`jev_evaluate` 多问题、object / array 形式的 `state`，以及错误 key 与缺 key 时的报错可读性。
 
-`scripts/jev-cases.mjs` 是一份固定的 **Jev 用例套件**：17 个用例覆盖三种原语的真实场景（风险闸门、内容审核、工单分类、意图路由、语言识别、紧急度评分、客户情绪、多维度 `jev_evaluate`），再加 4 个已知短板探针（计数、算术、日期比较、双否定）。每个用例都会校验 envelope 结构（概率和、`legend` 与选项的对应、`score` 落在等级范围内、`choice` 属于给定标签），明确的用例还带 golden 期望；短板探针只记录不判定失败。
+`scripts/jev-cases.mjs` 是一份固定的 **Jev 用例套件**：13 个用例覆盖三种原语的真实场景（风险闸门、内容审核、工单分类、意图路由、语言识别、紧急度评分、客户情绪、多维度 `jev_evaluate`），再加 4 个已知短板探针（计数、算术、日期比较、双否定）。每个用例都会校验 envelope 结构（概率和、`legend` 与选项的对应、`score` 落在等级范围内、`choice` 属于给定标签），明确的用例还带 golden 期望；短板探针只记录不判定失败。
 
 ```sh
 TYPESAFE_API_KEY=... npm run cases

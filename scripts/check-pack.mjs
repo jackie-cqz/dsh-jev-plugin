@@ -24,6 +24,7 @@ const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 
 /** The complete, exact publish payload. */
 const EXPECTED_FILES = [
+  'CHANGELOG.md',
   'LICENSE',
   'README.md',
   'README_zh.md',
