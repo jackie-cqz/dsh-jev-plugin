@@ -76,3 +76,8 @@ jobs:
         run: npm run check:install
         env:
           DSH_TEST_VERSION: 0.1.7-rc.2
+
+      - name: Verify DSH 0.2.0 runtime compatibility
+        run: npm run check:install
+        env:
+          DSH_TEST_VERSION: 0.2.0-rc.2

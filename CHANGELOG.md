@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1 — 2026-10-09
+
+- Support DSH `0.2.1-alpha.2` and its prerelease Cordis/Schemastery packages explicitly; retain the three previously tested DSH versions.
+- Move the locked development baseline to `0.2.1-alpha.2`, replacing the retired `dsh-invariants` peer with `dsh-working-directory`.
+- Match each isolated installation fixture to its host peer set and add DSH `0.2.0-rc.2` to the CI regression checks.
+- Update the English and Chinese installation/compatibility documentation for `v0.1.1`.
+- Update the build-only `source-map-js` dependency to `1.2.2`.
+
+Validation: typechecking, 782 plugin tests, two packaging-parser tests and all four DSH tarball installation checks pass. The new host also passes eight live API smoke checks, 13 scenario assertions and four characterization probes. Chromium verifies four real Jev tool calls, nine result bars and replay after reload, with a scripted LLM adapter. Public assets remain limited to the prebuilt package, changelog and checksums.
+
 ## 0.1.0 — 2026-10-02
 
 Initial public release.

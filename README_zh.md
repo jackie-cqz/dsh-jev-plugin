@@ -14,8 +14,8 @@ Jev 不是聊天模型：它不生成文本，只返回结构化判断。本插�
 
 ## 状态
 
-- 版本：`0.1.0`
-- 目标 DSH 版本：`0.2.0-rc.2`；保留 `0.1.7-rc.2` 和 `0.1.6-alpha.2` 安装回归验证（声明范围 `>=0.1.6-alpha.2 <0.2.0 || >=0.2.0-rc.2 <0.3.0`，其他版本尚未逐一验证）
+- 版本：`0.1.1`
+- 目标 DSH 版本：`0.2.1-alpha.2`；保留 `0.2.0-rc.2`、`0.1.7-rc.2` 和 `0.1.6-alpha.2` 安装回归验证（声明范围 `^0.1.6-alpha.2 || ^0.1.7-rc.2 || ^0.2.0-rc.2 || ^0.2.1-alpha.2`，其他版本尚未逐一验证）
 - 许可证：MIT
 - 独立包，通过 `dsh.bundle` 机制安装；不修改 DSH 主仓库
 
@@ -23,19 +23,19 @@ Jev 不是聊天模型：它不生成文本，只返回结构化判断。本插�
 
 | 项目 | 范围 |
 |---|---|
-| 目标 DeepSeek Harness | `0.2.0-rc.2`（另验证 `0.1.7-rc.2`、`0.1.6-alpha.2`） |
-| `@deepseek-ai/cordis`（peerDependency） | `^4.0.2` |
-| `@deepseek-ai/dsh-tools`（peerDependency） | `^0.1.6-alpha.2`、`^0.1.7-rc.2` 或 `^0.2.0-rc.2` |
+| 目标 DeepSeek Harness | `0.2.1-alpha.2`（另验证 `0.2.0-rc.2`、`0.1.7-rc.2`、`0.1.6-alpha.2`） |
+| `@deepseek-ai/cordis`（peerDependency） | `^4.0.2` 或 `^4.0.5-alpha.1` |
+| `@deepseek-ai/dsh-tools`（peerDependency） | `^0.1.6-alpha.2`、`^0.1.7-rc.2`、`^0.2.0-rc.2` 或 `^0.2.1-alpha.2` |
 | Node（插件 `engines`） | `>=22` |
 | Node（DSH 宿主） | `^22.19.0` 或 `>=24.0.0` |
 
 构建与测试依赖由 `package-lock.json` 锁定。CI 配置覆盖 Node 22 / 24；本地发布检查已在 Node 24 上通过。
 
-兼容检查：目标运行时的类型检查、782 个插件测试和 2 个打包报告解析测试通过；三版 DSH 的 tarball 安装检查均通过。Windows / Node 24 上的真实 TypeSafe smoke 和场景检查通过。Chromium 验收验证了四个成功工具调用、九个结果概率条以及刷新后重放，使用固定 LLM 测试适配器驱动真实 Jev 请求。Git 源码安装验收见发布记录。
+兼容检查：目标运行时的类型检查、782 个插件测试和 2 个打包报告解析测试通过；四版 DSH 的 tarball 安装检查均通过。Windows / Node 24 上的真实 TypeSafe smoke 和场景检查通过。Chromium 验收验证了四个成功工具调用、九个结果概率条以及刷新后重放，使用固定 LLM 测试适配器驱动真实 Jev 请求。Git 源码安装验收见发布记录。
 
 ### 为什么一批 `@deepseek-ai/*` 出现在 devDependencies
 
-发布的 `@deepseek-ai/dsh-tools@0.2.0-rc.2` 把 `dsh-agent`、`dsh-invariants`、`dsh-llm`、`dsh-ptc-runtime`、`dsh-sandbox`、`dsh-sandbox-policy`、`dsh-scope`、`dsh-session`、`dsh-system-prompt`、`dsh-user-approval` 声明为 peerDependencies（另有 `cordis`，本包已单独声明）。`npm install --legacy-peer-deps` 不会自动安装它们，而缺少任何一个都会让 `import '@deepseek-ai/dsh-tools'` 直接失败，因此本包把这 10 个包全部列入 devDependencies。运行期它们由目标 profile 提供，所以不进入 `dependencies`。
+发布的 `@deepseek-ai/dsh-tools@0.2.1-alpha.2` 把 `dsh-agent`、`dsh-llm`、`dsh-ptc-runtime`、`dsh-sandbox`、`dsh-sandbox-policy`、`dsh-scope`、`dsh-session`、`dsh-system-prompt`、`dsh-user-approval`、`dsh-working-directory` 声明为 peerDependencies（另有 `cordis`，本包已单独声明）。`npm install --legacy-peer-deps` 不会自动安装它们，而缺少任何一个都会让 `import '@deepseek-ai/dsh-tools'` 直接失败，因此本包把这 10 个包全部列入 devDependencies。运行期它们由目标 profile 提供，所以不进入 `dependencies`。
 
 ### 已知环境限制
 
@@ -57,7 +57,7 @@ dsh --profile jev-dev
 从 GitHub 安装（先按上面初始化 Web profile；版本标签固定安装的代码版本）：
 
 ```sh
-dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#v0.1.0
+dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#v0.1.1
 ```
 
 Git 源码安装会执行本包的 `prepare` 脚本（`npm run build`）。若被拦截，按照 **pnpm 报错中的配置键**修改该 profile 的 `pnpm-workspace.yaml`，再重试安装。pnpm 10 使用下面的配置，仅放行本插件：
@@ -77,7 +77,7 @@ allowBuilds:
 也可以使用 [v0.1.0 发布页](https://github.com/jackie-cqz/dsh-jev-plugin/releases/tag/v0.1.0) 的预构建安装包。初始化 Web profile 后直接执行：
 
 ```sh
-dsh plugin --profile jev-dev add https://github.com/jackie-cqz/dsh-jev-plugin/releases/download/v0.1.0/dsh-jev-plugin-0.1.0.tgz
+dsh plugin --profile jev-dev add https://github.com/jackie-cqz/dsh-jev-plugin/releases/download/v0.1.1/dsh-jev-plugin-0.1.1.tgz
 ```
 
 安装包包含服务端与 Web 客户端构建产物，无需编译插件。发布附件提供 SHA256SUMS，变更记录见 [CHANGELOG.md](./CHANGELOG.md)。
