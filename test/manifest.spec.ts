@@ -38,7 +38,7 @@ describe('package manifest', () => {
   it('declares a DSH compatibility range beside the Node one', () => {
     // The declared range is advisory, so it is the only statement of which
     // harness releases this plugin was built against.
-    expect(manifest.engines?.dsh).toBe('>=0.1.6-alpha.2 <0.2.0 || >=0.2.0-rc.2 <0.3.0')
+    expect(manifest.engines?.dsh).toBe('^0.1.6-alpha.2 || ^0.1.7-rc.2 || ^0.2.0-rc.2 || ^0.2.1-alpha.2')
     expect(manifest.engines?.node).toBe('>=22')
   })
 

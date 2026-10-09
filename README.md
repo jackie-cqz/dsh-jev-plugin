@@ -14,8 +14,8 @@ Jev returns structured judgments rather than conversational text. This plugin ex
 
 ## Status
 
-- Version: `0.1.0`.
-- Target DSH: `0.2.0-rc.2`; `0.1.7-rc.2` and `0.1.6-alpha.2` remain covered by installation smoke tests. Declared range: `>=0.1.6-alpha.2 <0.2.0 || >=0.2.0-rc.2 <0.3.0`; other versions have not been individually verified.
+- Version: `0.1.1`.
+- Target DSH: `0.2.1-alpha.2`; `0.2.0-rc.2`, `0.1.7-rc.2` and `0.1.6-alpha.2` remain covered by installation smoke tests. Declared range: `^0.1.6-alpha.2 || ^0.1.7-rc.2 || ^0.2.0-rc.2 || ^0.2.1-alpha.2`; other versions have not been individually verified.
 - License: MIT.
 - Standalone package installed through `dsh.bundle`; no changes to the DSH repository are required.
 
@@ -23,19 +23,19 @@ Jev returns structured judgments rather than conversational text. This plugin ex
 
 | Component | Version or range |
 |---|---|
-| Target DeepSeek Harness | `0.2.0-rc.2` (also tested: `0.1.7-rc.2`, `0.1.6-alpha.2`) |
-| `@deepseek-ai/cordis` (peer dependency) | `^4.0.2` |
-| `@deepseek-ai/dsh-tools` (peer dependency) | `^0.1.6-alpha.2`, `^0.1.7-rc.2` or `^0.2.0-rc.2` |
+| Target DeepSeek Harness | `0.2.1-alpha.2` (also tested: `0.2.0-rc.2`, `0.1.7-rc.2`, `0.1.6-alpha.2`) |
+| `@deepseek-ai/cordis` (peer dependency) | `^4.0.2` or `^4.0.5-alpha.1` |
+| `@deepseek-ai/dsh-tools` (peer dependency) | `^0.1.6-alpha.2`, `^0.1.7-rc.2`, `^0.2.0-rc.2` or `^0.2.1-alpha.2` |
 | Node (plugin) | `>=22` |
 | Node (DSH host) | `^22.19.0` or `>=24.0.0` |
 
 Build and test dependencies are locked in `package-lock.json`. CI is configured for Node 22 and 24; local release checks have passed on Node 24.
 
-Compatibility checks: typechecking, 782 plugin tests and two packaging-parser tests pass on the target runtime. Tarball installation checks cover all three listed DSH versions. Live TypeSafe smoke and scenario checks pass on Windows / Node 24. Chromium acceptance verifies four successful tool calls, nine result bars and replay after reload, using a scripted LLM adapter with real Jev requests. Git-source acceptance is recorded in the release notes.
+Compatibility checks: typechecking, 782 plugin tests and two packaging-parser tests pass on the target runtime. Tarball installation checks cover all four listed DSH versions. Live TypeSafe smoke and scenario checks pass on Windows / Node 24. Chromium acceptance verifies four successful tool calls, nine result bars and replay after reload, using a scripted LLM adapter with real Jev requests. Git-source acceptance is recorded in the release notes.
 
 ### Development dependencies
 
-`@deepseek-ai/dsh-tools@0.2.0-rc.2` declares these peers in addition to Cordis: `dsh-agent`, `dsh-invariants`, `dsh-llm`, `dsh-ptc-runtime`, `dsh-sandbox`, `dsh-sandbox-policy`, `dsh-scope`, `dsh-session`, `dsh-system-prompt`, and `dsh-user-approval` (all under `@deepseek-ai/`). Because `--legacy-peer-deps` does not install peers automatically, they are explicit development dependencies here. The target profile supplies them at runtime.
+`@deepseek-ai/dsh-tools@0.2.1-alpha.2` declares these peers in addition to Cordis: `dsh-agent`, `dsh-llm`, `dsh-ptc-runtime`, `dsh-sandbox`, `dsh-sandbox-policy`, `dsh-scope`, `dsh-session`, `dsh-system-prompt`, `dsh-user-approval`, and `dsh-working-directory` (all under `@deepseek-ai/`). Because `--legacy-peer-deps` does not install peers automatically, they are explicit development dependencies here. The target profile supplies them at runtime.
 
 ### TLS troubleshooting
 
@@ -57,7 +57,7 @@ The first command initializes a new Web profile; run it only once for an unused 
 From GitHub (initialize the Web profile as above first; the release tag fixes the installed revision):
 
 ```sh
-dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#v0.1.0
+dsh plugin --profile jev-dev add github:jackie-cqz/dsh-jev-plugin#v0.1.1
 ```
 
 Git installs run the package's `prepare` script (`npm run build`). If pnpm blocks it, edit the profile's `pnpm-workspace.yaml` using the setting named by **pnpm's error**, then repeat the install command. With pnpm 10, add only this package:
@@ -77,7 +77,7 @@ allowBuilds:
 The [v0.1.0 release](https://github.com/jackie-cqz/dsh-jev-plugin/releases/tag/v0.1.0) also provides a prebuilt package. After initializing a Web profile, install it directly:
 
 ```sh
-dsh plugin --profile jev-dev add https://github.com/jackie-cqz/dsh-jev-plugin/releases/download/v0.1.0/dsh-jev-plugin-0.1.0.tgz
+dsh plugin --profile jev-dev add https://github.com/jackie-cqz/dsh-jev-plugin/releases/download/v0.1.1/dsh-jev-plugin-0.1.1.tgz
 ```
 
 The archive includes the server and Web client builds, so no plugin compilation is needed. Release assets include SHA256SUMS and [CHANGELOG.md](./CHANGELOG.md).

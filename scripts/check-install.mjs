@@ -15,18 +15,26 @@ const dependencies = Object.fromEntries(Object.entries(manifest.devDependencies)
 // Exercise each supported prerelease explicitly: npm's latest tag and caret
 // ranges do not select a newer minor's prerelease automatically.
 const target = process.env.DSH_TEST_VERSION ?? manifest.devDependencies['@deepseek-ai/dsh-tools']
-if (!['0.1.6-alpha.2', '0.1.7-rc.2', '0.2.0-rc.2'].includes(target)) {
+if (!['0.1.6-alpha.2', '0.1.7-rc.2', '0.2.0-rc.2', '0.2.1-alpha.2'].includes(target)) {
   throw new Error(`Unsupported DSH_TEST_VERSION: ${target}`)
 }
 for (const name of Object.keys(dependencies)) {
   if (name.startsWith('@deepseek-ai/dsh-')) dependencies[name] = target
 }
-dependencies['@deepseek-ai/cordis'] = target === '0.1.6-alpha.2' ? '4.0.2' : '4.0.4'
-dependencies['@deepseek-ai/schemastery'] = target === '0.1.6-alpha.2' ? '3.18.2' : '3.18.4'
+// DSH 0.2.1 replaces the invariants peer with working-directory. Older
+// releases need their original peer set rather than an unpublished version.
+if (target !== '0.2.1-alpha.2') {
+  delete dependencies['@deepseek-ai/dsh-working-directory']
+  dependencies['@deepseek-ai/dsh-invariants'] = target
+}
+dependencies['@deepseek-ai/cordis'] = target === '0.2.1-alpha.2' ? '4.0.5-alpha.1'
+  : target === '0.1.6-alpha.2' ? '4.0.2' : '4.0.4'
+dependencies['@deepseek-ai/schemastery'] = target === '0.2.1-alpha.2' ? '3.18.5-alpha.1'
+  : target === '0.1.6-alpha.2' ? '3.18.2' : '3.18.4'
 console.log(`check-install: testing DSH ${target}`)
 dependencies[manifest.name] = `file:./${report.filename}`
 writeFileSync(join(fixture, 'package.json'), JSON.stringify({ private: true, type: 'module', dependencies }, null, 2))
-runNpm(['install', '--legacy-peer-deps', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', cache], { cwd: fixture, stdio: 'inherit' })
+runNpm(['install', '--legacy-peer-deps', '--ignore-scripts', '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org', '--cache', cache], { cwd: fixture, stdio: 'inherit' })
 writeFileSync(join(fixture, 'verify.mjs'), readFileSync(join(root, 'scripts', 'verify-installed.mjs')))
 execFileSync(process.execPath, ['verify.mjs'], { cwd: fixture, stdio: 'inherit' })
 console.log(`check-install: passed; fixture: ${fixture}`)
