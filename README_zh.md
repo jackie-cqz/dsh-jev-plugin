@@ -15,7 +15,7 @@ Jev 不是聊天模型：它不生成文本，只返回结构化判断。本插�
 ## 状态
 
 - 版本：`0.1.1`
-- 目标 DSH 版本：`0.2.1-alpha.2`；保留 `0.2.0-rc.2`、`0.1.7-rc.2` 和 `0.1.6-alpha.2` 安装回归验证（声明范围 `^0.1.6-alpha.2 || ^0.1.7-rc.2 || ^0.2.0-rc.2 || ^0.2.1-alpha.2`，其他版本尚未逐一验证）
+- 目标 DSH 版本：`0.2.1-rc.3`；安装检查另覆盖 `0.2.1-rc.2`、`0.2.1-rc.4` 及此前验证的四版宿主（声明范围 `^0.1.6-alpha.2 || ^0.1.7-rc.2 || ^0.2.0-rc.2 || ^0.2.1-alpha.2`，其他版本尚未逐一验证）
 - 许可证：MIT
 - 独立包，通过 `dsh.bundle` 机制安装；不修改 DSH 主仓库
 
@@ -23,7 +23,8 @@ Jev 不是聊天模型：它不生成文本，只返回结构化判断。本插�
 
 | 项目 | 范围 |
 |---|---|
-| 目标 DeepSeek Harness | `0.2.1-alpha.2`（另验证 `0.2.0-rc.2`、`0.1.7-rc.2`、`0.1.6-alpha.2`） |
+| 目标 DeepSeek Harness | `0.2.1-rc.3` |
+| 其他安装回归版本 | `0.2.1-rc.2`、`0.2.1-rc.4`、`0.2.1-alpha.2`、`0.2.0-rc.2`、`0.1.7-rc.2`、`0.1.6-alpha.2` |
 | `@deepseek-ai/cordis`（peerDependency） | `^4.0.2` 或 `^4.0.5-alpha.1` |
 | `@deepseek-ai/dsh-tools`（peerDependency） | `^0.1.6-alpha.2`、`^0.1.7-rc.2`、`^0.2.0-rc.2` 或 `^0.2.1-alpha.2` |
 | Node（插件 `engines`） | `>=22` |
@@ -31,11 +32,15 @@ Jev 不是聊天模型：它不生成文本，只返回结构化判断。本插�
 
 构建与测试依赖由 `package-lock.json` 锁定。CI 配置覆盖 Node 22 / 24；本地发布检查已在 Node 24 上通过。
 
-兼容检查：目标运行时的类型检查、782 个插件测试和 2 个打包报告解析测试通过；四版 DSH 的 tarball 安装检查均通过。Windows / Node 24 上的真实 TypeSafe smoke 和场景检查通过。Chromium 验收验证了四个成功工具调用、九个结果概率条以及刷新后重放，使用固定 LLM 测试适配器驱动真实 Jev 请求。Git 源码安装验收见发布记录。
+兼容检查：目标运行时的类型检查、782 个插件测试和 2 个打包报告解析测试通过；七版 DSH 的 tarball 安装检查均通过。Windows / Node 24 上，独立 Node 沿用 DSH 的现有代理策略后，8 项真实 TypeSafe smoke 检查通过。场景检查通过 12/13 项断言并记录 4 个特征探针：Jev 1.14.0 对客户不满的评分为 2.46/3，低于原有 2.5 阈值；保留该断言。Chromium 验收验证了四个成功工具调用、九个结果概率条以及刷新后重放，使用固定 LLM 测试适配器驱动真实 Jev 请求。本次 Web 检查从公开发布 URL 安装原版 v0.1.1；之前的 Git 源码安装验收见发布记录。
+
+现有 `v0.1.1` 发布包原样通过这些安装检查。改用 RC 开发基线重新构建，服务端与 Web JavaScript 产物逐字节一致。
+
+截至 2026-10-28，GitHub 最新发布为 `0.2.1-rc.3`，npm 的 `latest` 为 `0.2.1-rc.2`，`next` 为 `0.2.1-rc.4`。三个渠道分别验证，`next` 作为额外兼容检查。
 
 ### 为什么一批 `@deepseek-ai/*` 出现在 devDependencies
 
-发布的 `@deepseek-ai/dsh-tools@0.2.1-alpha.2` 把 `dsh-agent`、`dsh-llm`、`dsh-ptc-runtime`、`dsh-sandbox`、`dsh-sandbox-policy`、`dsh-scope`、`dsh-session`、`dsh-system-prompt`、`dsh-user-approval`、`dsh-working-directory` 声明为 peerDependencies（另有 `cordis`，本包已单独声明）。`npm install --legacy-peer-deps` 不会自动安装它们，而缺少任何一个都会让 `import '@deepseek-ai/dsh-tools'` 直接失败，因此本包把这 10 个包全部列入 devDependencies。运行期它们由目标 profile 提供，所以不进入 `dependencies`。
+发布的 `@deepseek-ai/dsh-tools@0.2.1-rc.3` 把 `dsh-agent`、`dsh-llm`、`dsh-ptc-runtime`、`dsh-sandbox`、`dsh-sandbox-policy`、`dsh-scope`、`dsh-session`、`dsh-system-prompt`、`dsh-user-approval`、`dsh-working-directory` 声明为 peerDependencies（另有 `cordis`，本包已单独声明）。`npm install --legacy-peer-deps` 不会自动安装它们，而缺少任何一个都会让 `import '@deepseek-ai/dsh-tools'` 直接失败，因此本包把这 10 个包全部列入 devDependencies。运行期它们由目标 profile 提供，所以不进入 `dependencies`。
 
 ### 已知环境限制
 
@@ -335,11 +340,11 @@ npm run check:release
 `check:release` 依次运行类型检查、全部测试、服务端与客户端构建、严格打包检查和 tarball 安装 smoke。`npm publish` 的 `prepublishOnly` 也执行同一套检查；检查失败会阻止发布。
 
 - `npm run check:pack`：要求先构建；核对 10 个发布文件、入口与 bundle patch、非空产物、双语 README 必需章节和语言切换链接，以及常见私钥/token 特征。特征扫描不保证识别所有格式的秘密。
-- `npm run check:install`：要求先构建；实际打包并安装到 `.release-smoke-*` 临时消费者目录，使用固定的 DSH `0.2.0-rc.2` 运行时依赖验证工具调用、注销、客户端工厂和 slot 注册。安装禁用生命周期脚本，验证 npm 包自带构建产物。目录保留供排查，并被 Git 与发布文件白名单排除。
+- `npm run check:install`：要求先构建；实际打包并安装到 `.release-smoke-*` 临时消费者目录，使用固定的 DSH `0.2.1-rc.3` 运行时依赖验证工具调用、注销、客户端工厂和 slot 注册。安装禁用生命周期脚本，验证 npm 包自带构建产物。目录保留供排查，并被 Git 与发布文件白名单排除。
 - 安装检查需要访问 npm registry，不调用真实 TypeSafe API，也不需要 API key；不代替 DSH CLI profile 安装与真实浏览器验收。
 - CI 在 Ubuntu / Windows、Node 22 / 24 上运行以上检查。真实 API 和浏览器验收需手动执行：安装到独立 DSH profile，启动 Web，分别调用 `jev_decide` 的 noul/choice/score 和 `jev_evaluate` 多问题，并检查结果卡片。
 
-CI 还分别设置 `DSH_TEST_VERSION=0.1.6-alpha.2` 和 `DSH_TEST_VERSION=0.1.7-rc.2` 运行安装检查，覆盖两版旧运行时。PowerShell 可先设置 `$env:DSH_TEST_VERSION` 再执行 `npm run check:install`。打包检查兼容 npm 10/11 的数组报告及 npm 12 的按包名索引报告。
+CI 还把 `DSH_TEST_VERSION` 分别设为兼容矩阵中的其他六个版本，执行安装检查。PowerShell 可先设置 `$env:DSH_TEST_VERSION` 再执行 `npm run check:install`。打包检查兼容 npm 10/11 的数组报告及 npm 12 的按包名索引报告。
 
 ### 本地验证
 
@@ -371,6 +376,8 @@ TYPESAFE_API_KEY=... npm run cases -- score     # 只跑某一类：noul / choic
 TYPESAFE_API_KEY=... node --tls-max-v1.2 scripts/smoke.mjs
 TYPESAFE_API_KEY=... node --tls-max-v1.2 scripts/jev-cases.mjs
 ```
+
+在 Node 24 上，若 DSH 使用已有 HTTP(S) 代理，而独立检查直接连接，可给运行脚本的 Node 添加 `--use-env-proxy`，让两者沿用相同的网络配置。
 
 插件默认使用平台 TLS 设置。若排查确认需要此参数，应同时应用于运行 DSH 的 Node 进程；不要将其视为所有环境的必需配置。
 

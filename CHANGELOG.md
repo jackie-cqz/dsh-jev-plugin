@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Verify the unchanged `v0.1.1` release archive on DSH `0.2.1-rc.2`, `0.2.1-rc.3` and `0.2.1-rc.4`, retaining the four previous runtime installation checks.
+- Move the locked development baseline to the newest GitHub release, DSH `0.2.1-rc.3`, with Cordis `4.0.5` and Schemastery `3.18.5`.
+- Distinguish the GitHub release, npm `latest` and npm `next` channels in both READMEs, and cover all seven hosts in CI.
+- Refresh compatible test-tool patches in the development lockfile.
+
+Validation on 2026-10-28: typecheck, 782 plugin tests, two packaging-parser tests, all seven original-archive installation checks, eight live API smoke checks and the rc.3 Web replay check pass. One of 13 live semantic assertions falls below its original threshold (Jev 1.14.0 customer-frustration score 2.46/3 versus 2.5); all four characterization probes are recorded. Standalone live checks use the existing proxy policy, as DSH does.
+
+Runtime JavaScript remains identical to the published `v0.1.1` package; this compatibility verification does not require a replacement release.
+
 ## 0.1.1 — 2026-10-09
 
 - Support DSH `0.2.1-alpha.2` and its prerelease Cordis/Schemastery packages explicitly; retain the three previously tested DSH versions.

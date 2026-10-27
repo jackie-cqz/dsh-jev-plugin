@@ -81,3 +81,18 @@ jobs:
         run: npm run check:install
         env:
           DSH_TEST_VERSION: 0.2.0-rc.2
+
+      - name: Verify previous DSH 0.2.1 alpha compatibility
+        run: npm run check:install
+        env:
+          DSH_TEST_VERSION: 0.2.1-alpha.2
+
+      - name: Verify DSH npm latest channel compatibility
+        run: npm run check:install
+        env:
+          DSH_TEST_VERSION: 0.2.1-rc.2
+
+      - name: Verify DSH npm next channel compatibility
+        run: npm run check:install
+        env:
+          DSH_TEST_VERSION: 0.2.1-rc.4
