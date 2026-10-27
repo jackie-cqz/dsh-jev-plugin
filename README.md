@@ -15,7 +15,7 @@ Jev returns structured judgments rather than conversational text. This plugin ex
 ## Status
 
 - Version: `0.1.1`.
-- Target DSH: `0.2.1-alpha.2`; `0.2.0-rc.2`, `0.1.7-rc.2` and `0.1.6-alpha.2` remain covered by installation smoke tests. Declared range: `^0.1.6-alpha.2 || ^0.1.7-rc.2 || ^0.2.0-rc.2 || ^0.2.1-alpha.2`; other versions have not been individually verified.
+- Target DSH: `0.2.1-rc.3`; installation checks also cover `0.2.1-rc.2`, `0.2.1-rc.4` and the four previously verified hosts. Declared range: `^0.1.6-alpha.2 || ^0.1.7-rc.2 || ^0.2.0-rc.2 || ^0.2.1-alpha.2`; other versions have not been individually verified.
 - License: MIT.
 - Standalone package installed through `dsh.bundle`; no changes to the DSH repository are required.
 
@@ -23,7 +23,8 @@ Jev returns structured judgments rather than conversational text. This plugin ex
 
 | Component | Version or range |
 |---|---|
-| Target DeepSeek Harness | `0.2.1-alpha.2` (also tested: `0.2.0-rc.2`, `0.1.7-rc.2`, `0.1.6-alpha.2`) |
+| Target DeepSeek Harness | `0.2.1-rc.3` |
+| Additional installation regressions | `0.2.1-rc.2`, `0.2.1-rc.4`, `0.2.1-alpha.2`, `0.2.0-rc.2`, `0.1.7-rc.2`, `0.1.6-alpha.2` |
 | `@deepseek-ai/cordis` (peer dependency) | `^4.0.2` or `^4.0.5-alpha.1` |
 | `@deepseek-ai/dsh-tools` (peer dependency) | `^0.1.6-alpha.2`, `^0.1.7-rc.2`, `^0.2.0-rc.2` or `^0.2.1-alpha.2` |
 | Node (plugin) | `>=22` |
@@ -31,11 +32,15 @@ Jev returns structured judgments rather than conversational text. This plugin ex
 
 Build and test dependencies are locked in `package-lock.json`. CI is configured for Node 22 and 24; local release checks have passed on Node 24.
 
-Compatibility checks: typechecking, 782 plugin tests and two packaging-parser tests pass on the target runtime. Tarball installation checks cover all four listed DSH versions. Live TypeSafe smoke and scenario checks pass on Windows / Node 24. Chromium acceptance verifies four successful tool calls, nine result bars and replay after reload, using a scripted LLM adapter with real Jev requests. Git-source acceptance is recorded in the release notes.
+Compatibility checks: typechecking, 782 plugin tests and two packaging-parser tests pass on the target runtime. Tarball installation checks cover all seven listed DSH versions. On Windows / Node 24, eight live TypeSafe smoke checks pass when Node uses the existing proxy policy, matching DSH. The scenario run passes 12 of 13 assertions and records four characterization probes: Jev 1.14.0 returns 2.46/3 for customer frustration, below the existing 2.5 threshold. That assertion is retained. Chromium acceptance verifies four successful tool calls, nine result bars and replay after reload, using a scripted LLM adapter with real Jev requests. The original v0.1.1 archive was installed from its public release URL for this Web check; the earlier Git-source acceptance remains in the release notes.
+
+The existing `v0.1.1` release archive passes these installation checks unchanged. Rebuilding against the RC development baseline produces identical server and Web JavaScript bundles.
+
+As of 2026-10-28, the newest GitHub release is `0.2.1-rc.3`, while npm `latest` is `0.2.1-rc.2` and `next` is `0.2.1-rc.4`. The three channels are verified separately; `next` is an additional compatibility check.
 
 ### Development dependencies
 
-`@deepseek-ai/dsh-tools@0.2.1-alpha.2` declares these peers in addition to Cordis: `dsh-agent`, `dsh-llm`, `dsh-ptc-runtime`, `dsh-sandbox`, `dsh-sandbox-policy`, `dsh-scope`, `dsh-session`, `dsh-system-prompt`, `dsh-user-approval`, and `dsh-working-directory` (all under `@deepseek-ai/`). Because `--legacy-peer-deps` does not install peers automatically, they are explicit development dependencies here. The target profile supplies them at runtime.
+`@deepseek-ai/dsh-tools@0.2.1-rc.3` declares these peers in addition to Cordis: `dsh-agent`, `dsh-llm`, `dsh-ptc-runtime`, `dsh-sandbox`, `dsh-sandbox-policy`, `dsh-scope`, `dsh-session`, `dsh-system-prompt`, `dsh-user-approval`, and `dsh-working-directory` (all under `@deepseek-ai/`). Because `--legacy-peer-deps` does not install peers automatically, they are explicit development dependencies here. The target profile supplies them at runtime.
 
 ### TLS troubleshooting
 
@@ -321,11 +326,11 @@ npm run check:release
 This runs typechecking, tests, server and client builds, strict packaging checks, and a tarball installation smoke test. The `prepublishOnly` lifecycle runs the same gate before publication.
 
 - `npm run check:pack` requires a build and checks the ten packaged files, entry points, bundle patch, non-empty artifacts, both READMEs and their language links, and common private-key/token patterns. Pattern scanning cannot detect every secret format.
-- `npm run check:install` builds a real tarball from existing artifacts and installs it into `.release-smoke-*` with lifecycle scripts disabled. Using the target DSH `0.2.0-rc.2` runtime and a mock API, it checks calls, disposal, the client factory, and slot registration. Fixtures remain available for inspection and are excluded from Git and publication.
+- `npm run check:install` builds a real tarball from existing artifacts and installs it into `.release-smoke-*` with lifecycle scripts disabled. Using the target DSH `0.2.1-rc.3` runtime and a mock API, it checks calls, disposal, the client factory, and slot registration. Fixtures remain available for inspection and are excluded from Git and publication.
 - Installation checks need registry access but no TypeSafe key. They do not replace DSH CLI profile or browser acceptance tests.
 - CI is configured for Ubuntu/Windows and Node 22/24. For manual acceptance, install into a separate DSH profile, start the Web UI, call all three `jev_decide` primitives and multi-question `jev_evaluate`, and inspect result cards.
 
-The CI installation gate also runs with `DSH_TEST_VERSION=0.1.6-alpha.2` and `DSH_TEST_VERSION=0.1.7-rc.2` to check both previous runtimes. In PowerShell, set `$env:DSH_TEST_VERSION` before `npm run check:install`. Build tooling supports npm 10/11 array reports and npm 12 keyed pack reports.
+The CI installation gate also runs with `DSH_TEST_VERSION` set to each of the six additional versions in the compatibility table. In PowerShell, set `$env:DSH_TEST_VERSION` before `npm run check:install`. Build tooling supports npm 10/11 array reports and npm 12 keyed pack reports.
 
 ### Local validation
 
@@ -354,6 +359,8 @@ If Node handshakes time out while `curl` succeeds, try a temporary TLS 1.2 cap:
 TYPESAFE_API_KEY=... node --tls-max-v1.2 scripts/smoke.mjs
 TYPESAFE_API_KEY=... node --tls-max-v1.2 scripts/jev-cases.mjs
 ```
+
+On Node 24, if DSH uses an existing HTTP(S) proxy but standalone checks connect directly, add `--use-env-proxy` when running the Node scripts so both use the same configured network policy.
 
 The plugin normally uses platform TLS defaults. Apply this option to the DSH Node process only if troubleshooting confirms it is needed in your environment.
 

@@ -15,7 +15,7 @@ const dependencies = Object.fromEntries(Object.entries(manifest.devDependencies)
 // Exercise each supported prerelease explicitly: npm's latest tag and caret
 // ranges do not select a newer minor's prerelease automatically.
 const target = process.env.DSH_TEST_VERSION ?? manifest.devDependencies['@deepseek-ai/dsh-tools']
-if (!['0.1.6-alpha.2', '0.1.7-rc.2', '0.2.0-rc.2', '0.2.1-alpha.2'].includes(target)) {
+if (!['0.1.6-alpha.2', '0.1.7-rc.2', '0.2.0-rc.2', '0.2.1-alpha.2', '0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4'].includes(target)) {
   throw new Error(`Unsupported DSH_TEST_VERSION: ${target}`)
 }
 for (const name of Object.keys(dependencies)) {
@@ -23,13 +23,16 @@ for (const name of Object.keys(dependencies)) {
 }
 // DSH 0.2.1 replaces the invariants peer with working-directory. Older
 // releases need their original peer set rather than an unpublished version.
-if (target !== '0.2.1-alpha.2') {
+if (!target.startsWith('0.2.1-')) {
   delete dependencies['@deepseek-ai/dsh-working-directory']
   dependencies['@deepseek-ai/dsh-invariants'] = target
 }
-dependencies['@deepseek-ai/cordis'] = target === '0.2.1-alpha.2' ? '4.0.5-alpha.1'
+const isReleaseCandidate = target.startsWith('0.2.1-rc.')
+dependencies['@deepseek-ai/cordis'] = isReleaseCandidate ? '4.0.5'
+  : target === '0.2.1-alpha.2' ? '4.0.5-alpha.1'
   : target === '0.1.6-alpha.2' ? '4.0.2' : '4.0.4'
-dependencies['@deepseek-ai/schemastery'] = target === '0.2.1-alpha.2' ? '3.18.5-alpha.1'
+dependencies['@deepseek-ai/schemastery'] = isReleaseCandidate ? '3.18.5'
+  : target === '0.2.1-alpha.2' ? '3.18.5-alpha.1'
   : target === '0.1.6-alpha.2' ? '3.18.2' : '3.18.4'
 console.log(`check-install: testing DSH ${target}`)
 dependencies[manifest.name] = `file:./${report.filename}`
